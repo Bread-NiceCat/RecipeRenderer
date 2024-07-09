@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "cn.breadnicecat.reciperenderer.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "minVersion": "0.8",
+  "client": [
+  ],
+  "mixins": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

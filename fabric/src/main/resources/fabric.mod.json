@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "reciperenderer",
+  "version": "${version}",
+  "name": "Recipe Renderer",
+  "description": "",
+  "authors": [
+    "Bread_NiceCat"
+  ],
+  "contact": {
+    "homepage": "https://github.com/Bread-Nicecat/RecipeRenderer",
+    "sources": "https://github.com/Bread-Nicecat/RecipeRenderer"
+  },
+  "mixins": [
+    "reciperenderer.mixins.json",
+    "reciperenderer-common.mixins.json"
+  ],
+  "license": "GNU LGPL v3",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-datagen": [
+    ],
+    "main": [
+      "cn.breadnicecat.reciperenderer.fabric.RecipeRendererImpl"
+    ]
+  },
+  "depends": {
+    "minecraft": "*"
+  }
+}

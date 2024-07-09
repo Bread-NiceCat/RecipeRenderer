@@ -1,0 +1,95 @@
+plugins {
+    id "architectury-plugin" version "3.4-SNAPSHOT"
+    id "dev.architectury.loom" version "1.5-SNAPSHOT" apply false
+}
+
+architectury {
+    minecraft = minecraft_version
+}
+allprojects {
+    apply plugin: "java"
+    apply plugin: "idea"
+    apply plugin: "architectury-plugin"
+    apply plugin: "maven-publish"
+
+    archivesBaseName = archives_base_name
+    version = mod_version
+    group = maven_group
+
+    repositories {
+        if (Locale.getDefault() == Locale.CHINA) {
+            //Faster Repo For Chinese
+            var aliyun = maven { url = "https://maven.aliyun.com/repository/public" }
+            remove(aliyun)
+            addFirst(aliyun)
+//        maven { url = "https://download.mcbbs.net/assets/" }
+        }
+        //================
+        flatDir {
+            dir rootProject.file("libs")
+            content { includeGroup "native" }
+        }
+        maven { url = "https://modmaven.dev" }
+        maven {
+            url "https://cursemaven.com"
+            content { includeGroup "curse.maven" }
+        }
+        maven { url "https://maven.minecraftforge.net/" }
+        maven { url = 'https://maven.parchmentmc.org' }
+
+    }
+
+    //给gitee擦屁股!!!
+    getRepositories().forEach { repo ->
+        if (repo instanceof MavenArtifactRepository) {
+            def url = repo.getUrl()
+            def us = url.toString().split("://", 2)
+            if (us[0] == "http") {
+                println("检测到http协议repo($url),正在强制转化为https协议")
+                repo.url = new URI("https://${us[1]}")
+            }
+        }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = "UTF-8"
+        options.release = 17
+    }
+
+    java {
+        withSourcesJar()
+    }
+
+    jar {
+        manifest {
+            attributes(BuiltTime: new Date())
+        }
+    }
+}
+subprojects {
+    apply plugin: "dev.architectury.loom"
+
+    dependencies {
+        minecraft "com.mojang:minecraft:${minecraft_version}"
+        mappings loom.layered() {
+            officialMojangMappings()
+            parchment("org.parchmentmc.data:${parchment_version}")
+        }
+
+    }
+}
+
+//declare repositories
+println("=".repeat(64))
+println("here in project $project.name")
+println("repo here=>")
+getRepositories().forEach { it ->
+    if (it instanceof MavenArtifactRepository) {
+        println it.url
+    } else if (it instanceof FlatDirectoryArtifactRepository) {
+        println it.dirs
+    } else print it
+}
+println("repo end")
+println("=".repeat(64))
+//================================================================//
