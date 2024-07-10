@@ -2,10 +2,10 @@ package cn.breadnicecat.reciperenderer.entry;
 
 import com.google.gson.JsonObject;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.item.enchantment.Enchantment;
 
 /**
- * Created in 2024/7/9 下午11:01
+ * Created in 2024/7/10 下午3:02
  * Project: reciperenderer
  *
  * @author <a href="https://github.com/Bread-Nicecat">Bread_NiceCat</a>
@@ -13,25 +13,26 @@ import net.minecraft.world.effect.MobEffect;
  *
  * <p>
  **/
-public class EffectEntry implements Storable, Localizable {
-	final MobEffect effect;
-	public byte[] icoRaw;
-	public String ico;
-	public String id;
-	public String color;
+public class EnchantEntry implements Localizable, Storable {
+	final Enchantment value;
 	
+	public String id;
+	public int min;
+	public int max;
 	public String zh;
 	public String en;
 	
-	public EffectEntry(String id, MobEffect effect) {
-		this.effect = effect;
+	public EnchantEntry(String id, Enchantment value) {
 		this.id = id;
-		this.color = Integer.toString(effect.getColor(), 16);
+		this.value = value;
+		min = value.getMinLevel();
+		max = value.getMaxLevel();
+		
 	}
 	
 	@Override
 	public Component getName() {
-		return effect.getDisplayName();
+		return Component.translatable(value.getDescriptionId());
 	}
 	
 	@Override
@@ -49,7 +50,7 @@ public class EffectEntry implements Storable, Localizable {
 		object.addProperty("id", id);
 		object.addProperty("en", en);
 		object.addProperty("zh", zh);
-		object.addProperty("ico", ico);
-		object.addProperty("color", color);
+		object.addProperty("min", min);
+		object.addProperty("max", max);
 	}
 }

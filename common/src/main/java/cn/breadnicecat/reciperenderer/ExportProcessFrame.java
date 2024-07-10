@@ -17,11 +17,11 @@ import java.io.IOException;
  **/
 public class ExportProcessFrame {
 	
-	private final JFrame frame;
-	private final JProgressBar progressBar;
-	private final JButton button;
-	private final JLabel label0;
-	private final JLabel label;
+	public final JFrame frame;
+	public final JProgressBar progressBar;
+	public final JButton button;
+	public final JLabel label0;
+	public final JLabel label;
 	private final ActionListener CANCEL;
 	protected int process = 0;
 	protected boolean cancel = false;
@@ -32,7 +32,7 @@ public class ExportProcessFrame {
 		frame = new JFrame("导出 " + modid);
 		frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
 		frame.setAlwaysOnTop(true);
-		int widthBase = 410;
+		int widthBase = 350;
 		frame.setSize(new Dimension(widthBase + 15, 260));
 		
 		JPanel panel = new JPanel(new FlowLayout());
@@ -41,7 +41,7 @@ public class ExportProcessFrame {
 		label0 = new JLabel("导出 " + modid);
 		label = new JLabel("正在导出");
 		label0.setPreferredSize(new Dimension(widthBase, 50));
-		label.setPreferredSize(new Dimension(widthBase, 50));
+		label.setPreferredSize(new Dimension(widthBase, 30));
 		panel.add(label0);
 		panel.add(label);
 		
@@ -98,19 +98,19 @@ public class ExportProcessFrame {
 	}
 	
 	public void setProcess(float processPercent) {
-		checkCancel();
 		setProcess((int) processPercent * MAX);
 	}
 	
 	public void addProcess(float delta) {
-		addProcess(delta, 0f);
+		addProcess(delta, 1f);
 	}
 	
-	public void addProcess(float delta, float floor) {
-		addProcess(delta, floor, 1f);
+	public void addProcess(float delta, float ceilPercent) {
+		addProcess(delta, 0f, 1f);
 	}
 	
 	public void addProcess(float deltaPercent, float floorPercent, float ceilPercent) {
+		checkCancel();
 		int de = (int) (MAX * deltaPercent);
 		if (de <= 0) {
 			de = 1;
@@ -126,6 +126,16 @@ public class ExportProcessFrame {
 	public void setTextMajor(String text) {
 		checkCancel();
 		label0.setText(text);
+	}
+	
+	public void setTextBar(String text) {
+		checkCancel();
+		progressBar.setString(text);
+	}
+	
+	public void setTextButton(String text) {
+		checkCancel();
+		button.setText(text);
 	}
 	
 	public void setText(String text) {
@@ -150,6 +160,7 @@ public class ExportProcessFrame {
 			return;
 		}
 		setProcess(MAX);
+		label0.setHorizontalAlignment(SwingConstants.CENTER);
 		label.setText("导出完成");
 		button.setText("打开文件夹");
 		frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
@@ -165,7 +176,9 @@ public class ExportProcessFrame {
 	
 	public void invalidate() {
 		button.setText("关闭");
+		progressBar.setForeground(Color.RED);
 		cancel = true;
+		
 		frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 		button.removeActionListener(CANCEL);
 		button.addActionListener((s) -> frame.dispose());
@@ -180,6 +193,15 @@ public class ExportProcessFrame {
 		if (cancel) {
 			throw new RuntimeException("已取消");
 		}
+	}
+	
+	public void revalidate() {
+		cancel = false;
+	}
+	
+	public void close() {
+		frame.setVisible(false);
+		frame.dispose();
 	}
 	
 	static class Empty extends ExportProcessFrame {
@@ -211,10 +233,61 @@ public class ExportProcessFrame {
 		@Override
 		protected void cancel() {
 		}
+		
+		public Empty(String modid) {
+			super(modid);
+		}
+		
+		@Override
+		public void setProcess(float processPercent) {
+		}
+		
+		@Override
+		public void setTextMajor(String text) {
+		}
+		
+		@Override
+		public void setTextBar(String text) {
+		}
+		
+		@Override
+		public void invalidate() {
+		}
+		
+		@Override
+		public void close() {
+		}
+		
+		@Override
+		public void revalidate() {
+		}
+		
+		@Override
+		protected void checkCancel() {
+		}
+		
+		@Override
+		public boolean isCancel() {
+			return false;
+		}
+		
+		@Override
+		public float getProcessPercent() {
+			return 0f;
+		}
+		
+		@Override
+		public void setTextButton(String text) {
+		}
+		
+		@Override
+		public void addProcess(float delta, float ceilPercent) {
+		}
 	}
 	
 	public static void main(String[] args) {
 		ExportProcessFrame frame1 = new ExportProcessFrame("minecraft");
+		frame1.setText("<html><body><p align=\"center\">数据版本<br/>v1.0.0</p></body></html>");
 		var ref = new Object() {
 			Timer timer;
 		};

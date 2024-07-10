@@ -8,11 +8,6 @@ architectury {
 }
 loom {
     accessWidenerPath = project(":common").loom.accessWidenerPath
-    runs {
-        client {
-            vmArg "-Dmixin.debug.export=true"
-        }
-    }
 }
 
 configurations {
@@ -29,7 +24,7 @@ dependencies {
 
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
     shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive false }
-    
+
 }
 
 processResources {

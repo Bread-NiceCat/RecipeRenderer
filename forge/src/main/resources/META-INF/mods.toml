@@ -1,7 +1,7 @@
 modLoader = "javafml"
-loaderVersion = "[47,)"
+loaderVersion = "[0,)"
 issueTrackerURL = "https://github.com/Bread-Nicecat/RecipeRenderer/issues"
-license = "GNU LGPL v3"
+license = "GNU GPL v3"
 
 [[mods]]
 modId = "reciperenderer"

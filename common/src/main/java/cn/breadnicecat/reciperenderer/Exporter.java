@@ -1,20 +1,24 @@
 package cn.breadnicecat.reciperenderer;
 
 import cn.breadnicecat.reciperenderer.cmd.ICmdFeedback;
+import cn.breadnicecat.reciperenderer.datafix.DataStorer;
 import cn.breadnicecat.reciperenderer.entry.*;
-import cn.breadnicecat.reciperenderer.utils.LogUtils;
+import cn.breadnicecat.reciperenderer.utils.Runnable_WithException;
 import cn.breadnicecat.reciperenderer.utils.Timer;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.datafixers.util.Pair;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.language.ClientLanguage;
+import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.locale.Language;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
@@ -23,7 +27,7 @@ import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.Item;
-import org.slf4j.Logger;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -33,7 +37,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import static cn.breadnicecat.reciperenderer.RecipeRenderer.*;
-import static net.minecraft.network.chat.Component.empty;
+import static cn.breadnicecat.reciperenderer.utils.CommonUtils.byId;
 import static net.minecraft.network.chat.Component.literal;
 
 /**
@@ -47,13 +51,21 @@ import static net.minecraft.network.chat.Component.literal;
  **/
 @Environment(EnvType.CLIENT)
 public class Exporter {
-	final static Logger LOGGER = LogUtils.getModLogger();
-	final static Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
-	private final Base64.Encoder BASE64 = Base64.getEncoder();
+	static final Object LOCK = new Object();
+	static final Object I18N_LOCK = new Object();
+	static volatile int ran = 0;
+	
+	public static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
+	public static final Base64.Encoder BASE64 = Base64.getEncoder();
+	
+	static Minecraft instance = Minecraft.getInstance();
+	static IntegratedServer server = instance.getSingleplayerServer();
+	
 	String modid;
 	ICmdFeedback feedback;
-	Minecraft instance;
-	Timer stt;
+	DataStorer dataStorer;
+	
+	Timer stt, partStt;
 	ExportProcessFrame frame;
 	File root;
 	
@@ -63,79 +75,186 @@ public class Exporter {
 	List<ItemEntry> items = new LinkedList<>();
 	List<EntityEntry> entities = new LinkedList<>();
 	List<EffectEntry> effects = new LinkedList<>();
-	List<List<? extends Localizable>> locals = List.of(items, entities, effects);
+	List<EnchantEntry> enchantments = new LinkedList<>();
+	List<NameEntry> biomes = new LinkedList<>();
+	
+	List<List<? extends Localizable>> locals = List.of(items, entities, effects, enchantments);
 	List<JsonObject> recipes = new LinkedList<>();
 	Set<String> recipeTypes = new TreeSet<>();
 	
-	public Exporter() {
+	public Exporter(String modid) {
+		this.modid = modid;
 	}
 	
-	public void run(final String modid, final ICmdFeedback feedback) {
+	/**
+	 * @return true:已取消
+	 */
+	private boolean tryRun(Runnable_WithException rr, @Nullable Runnable fail) {
+		try {
+			rr.run();
+		} catch (Exception e) {
+			softFail(e);
+			if (fail != null) {
+				fail.run();
+				if (e instanceof ExportCancelledException) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+	
+	public void run(final ICmdFeedback feedback, final DataStorer dataStorer) {
 		stt = new Timer();
+		partStt = new Timer();
+		
+		this.feedback = feedback;
+		this.dataStorer = dataStorer;
+		
+		if (!feedback.isPlayer()) {
+			throw new RuntimeException("不是玩家");
+		}
 		RenderSystem.assertOnRenderThread();
 		
-		this.modid = modid;
-		this.feedback = feedback;
+		suspend();
 		
 		ExportProcessFrame frame;
 		try {
 			frame = new ExportProcessFrame(modid);
 		} catch (Exception e) {
-			fail(e);
 			feedback.sendError(literal("无法创建窗口"));
+			softFail(e);
 			frame = ExportProcessFrame.empty();
 		}
 		this.frame = frame;
 		
-		
-		feedback.sendFeedback(literal("开始导出mod: " + modid));
-		instance = Minecraft.getInstance();
-		this.root = new File(instance.gameDirectory, "rr_export/" + modid);
-		root.mkdirs();
-		//防止出现最后因为文件而无法导出的情况
-		
 		try {
-			outputs_zip = new FileOutputStream(new File(root, "output.zip"));
-			images_zip = new FileOutputStream(new File(root, "images.zip"));
-			collectRenderMust();
+			this.root = new File(instance.gameDirectory, "rr_export/" + modid);
+			root.mkdirs();
+			//防止出现最后因为文件而无法导出的情况
+			File outfile = new File(root, "output.zip");
+			outputs_zip = new FileOutputStream(outfile);
+			File imgfile = new File(root, "images.zip");
+			images_zip = new FileOutputStream(imgfile);
+			if (tryRun(this::collectItem, items::clear)) return;
+			if (tryRun(this::collectEntity, entities::clear)) return;
+			Util.backgroundExecutor().submit(() -> {
+				try {
+					if (tryRun(this::collectRecipe, recipes::clear)) return;
+					if (tryRun(this::collectEffect, effects::clear)) return;
+					if (tryRun(this::collectEnchant, enchantments::clear)) return;
+					if (tryRun(this::collectBiome, biomes::clear)) return;
+					
+					int rs = recipes.size();
+					int rts = recipeTypes.size();
+					int is = items.size();
+					int effs = effects.size();
+					int es = entities.size();
+					int bios = biomes.size();
+					int encs = enchantments.size();
+					if ((rs | rts | is | effs | es | bios | encs) == 0) {
+						feedback.sendFeedback(literal(modid + "无条目可导出").withStyle(ChatFormatting.YELLOW));
+						imgfile.delete();
+						outfile.delete();
+						root.delete();
+						this.frame.close();
+						return;
+					}
+					
+					collectLang();//sync
+					write();
+					var ref = new Object() {
+						StringBuilder text = new StringBuilder("<html><body>共计导出了");
+						StringJoiner msg = new StringJoiner(",", "共计导出了", "");
+						StringJoiner temp = new StringJoiner(",");
+						
+						void append(String s) {
+							msg.add(s);
+							temp.add(s);
+						}
+						
+						void save() {
+							text.append(temp).append("<br/>");
+							temp = new StringJoiner(",");
+						}
+						
+						String textEnd() {
+							return text.append("</body></html>").toString();
+						}
+					};
+					ref.append("%d条配方(涉及%d个类型)".formatted(rs, rts));
+					ref.save();
+					ref.append("%d个物品".formatted(is));
+					ref.append("%d个实体".formatted(es));
+					ref.save();
+					ref.append("%d个效果".formatted(effs));
+					ref.append("%d个附魔".formatted(encs));
+					ref.append("%d个群系".formatted(bios));
+					ref.save();
+					this.frame.setTextMajor(ref.textEnd());
+					String conTime = "用时" + stt.getStringAndReset();
+					feedback.sendFeedback(literal(modid + "导出完成" + ref.msg + "," + conTime).withStyle(ChatFormatting.GREEN));
+					this.frame.setText(conTime);
+				} catch (Exception e) {
+					fastFail(e);
+				} finally {
+					resume();
+				}
+			});
 		} catch (Exception e) {
-			fail(e);
-			return;
+			fastFail(e);
+			resume();
 		}
-		Util.backgroundExecutor().submit(() -> {
-			boolean fail = false;
-			try {
-				collectRecipe();
-				collectEffect();
-				collectLang();
-				write();
-			} catch (Exception e) {
-				fail = true;
-				fail(e);
-			}
-			if (!fail) {
-				feedback.sendFeedback(literal(modid + "导出完成").withStyle(ChatFormatting.GREEN));
-				String cons = "共计导出了%d条配方(涉及%d个类型),%d个物品,%d个药水效果,%d个实体".formatted(recipes.size(), recipeTypes.size(), items.size(), effects.size(), entities.size());
-				feedback.sendFeedback(literal(cons));
-				this.frame.setTextMajor(cons);
-				String conTime = "用时" + stt.getString();
-				feedback.sendFeedback(literal(conTime));
-				this.frame.setText(conTime);
-			}
-			feedback.sendFeedback(empty());
-		});
 	}
 	
-	private void fail(Exception e) {
+	@SuppressWarnings("removal")
+	private void resume() {
+		synchronized (LOCK) {
+			if (--ran == 0) {
+				try {
+					LOGGER.info("恢复服务器线程");
+					server.getRunningThread().resume();
+				} catch (Exception e) {
+					softFail(e);
+					feedback.sendError(literal("无法恢复服务器线程"));
+				}
+			}
+		}
+	}
+	
+	@SuppressWarnings("removal")
+	private void suspend() {
+		synchronized (LOCK) {
+			if (ran++ == 0) {
+				try {
+					LOGGER.info("暂停服务器线程");
+					server.getRunningThread().suspend();
+				} catch (Exception e) {
+					softFail(e);
+					feedback.sendError(literal("无法暂停服务器线程"));
+				}
+			}
+		}
+	}
+	
+	private void softFail(Exception e) {
 		e.printStackTrace();
-		frame.setTextMajor("出错啦！(详情请看日志)");
-		frame.setText(e.getMessage());
-		frame.invalidate();
+		if (frame != null) {
+			if (frame.isCancel()) {
+				frame.revalidate();
+				frame.setTextBar(e.getMessage());
+				frame.invalidate();
+			}
+		}
 		feedback.sendError(literal(" 导出" + modid + "时遇到错误: " + e.getMessage()).withStyle(ChatFormatting.RED));
 	}
 	
-	private void collectRenderMust() {
-		Timer stt = new Timer();
+	private void fastFail(Exception e) {
+		frame.cancel();
+		softFail(e);
+	}
+	
+	private void collectItem() {
 		LOGGER.info("开始获取物品");
 		frame.setTextMajor("获取物品");
 		var iilist = BuiltInRegistries.ITEM.entrySet().stream()
@@ -144,40 +263,16 @@ public class Exporter {
 		
 		float idelta = 0.3f / iilist.size();
 		iilist.forEach(i -> {
-			frame.setText("添加物品: " + i.getKey().location());
+			ResourceLocation location = i.getKey().location();
+			frame.setText("添加物品: " + location);
 			Item value = i.getValue();
-			items.add(new ItemEntry(i.getKey().location(), value.getDefaultInstance()));
+			items.add(new ItemEntry(location, value.getDefaultInstance()));
 			frame.addProcess(idelta, 0, 0.3f);
 		});
-		LOGGER.info("完成获取物品: {}", stt.getStringAndReset());
-//		CreativeModeTabs.tryRebuildTabContents(instance.getConnection().enabledFeatures(), true, instance.getConnection().registryAccess());
-//		LOGGER.info("rebuild: {}", stt.getStringAndReset());
-//		Set<ResourceLocation> blackList = Set.of(getHOTBAR(), getINVENTORY(), getSEARCH()).stream().map(i -> i.location()).collect(Collectors.toSet());
-//		List<CreativeModeTab> tabs = CreativeModeTabs.allTabs();
-//		for (CreativeModeTab group : tabs) {
-//			ResourceLocation tabKey = BuiltInRegistries.CREATIVE_MODE_TAB.getKey(group);
-//			if (blackList.contains(tabKey)) continue;
-//
-//			frame.addProcess(400 / tabs.size(), 0, 400);
-//			frame.setTextMajor("搜索物品栏: " + tabKey);
-//
-//			LOGGER.info("\tnext: {}", stt.getStringAndReset());
-//			Collection<ItemStack> itemStacks = group.getDisplayItems();
-//			LOGGER.info("\tgetItem: {}", stt.getStringAndReset());
-//			for (ItemStack stack : itemStacks) {
-//				ResourceLocation id = ITEM.getKey(stack.getItem());
-//				if (id.getNamespace().equals(modid)) {
-//
-//					frame.setText("添加物品: " + id);
-//					ItemEntry e = new ItemEntry(id, stack);
-//					frame.addProcess(10, 0, 400);
-//					items.add(e);
-//				}
-//			}
-//			LOGGER.info("\texit: {}", stt.getStringAndReset());
-//			LOGGER.info("");
-//
-//		}
+		LOGGER.info("完成获取物品: {}", partStt.getStringAndReset());
+	}
+	
+	private void collectEntity() {
 		LOGGER.info("开始获取实体");
 		frame.setTextMajor("获取实体");
 		var eelist = BuiltInRegistries.ENTITY_TYPE.entrySet().stream()
@@ -185,13 +280,39 @@ public class Exporter {
 				.toList();
 		float edelta = 0.2f / eelist.size();
 		eelist.forEach(i -> {
-			frame.setText("添加实体: " + i.getKey().location());
+			ResourceLocation location = i.getKey().location();
+			frame.setText("添加实体: " + location);
 			Entity entity = i.getValue().create(instance.level);
-			if (entity instanceof Mob) entities.add(new EntityEntry(i.getKey().location(), entity));
+			if (entity instanceof Mob) entities.add(new EntityEntry(location, entity));
 			frame.addProcess(edelta, 0.3f, 0.4f);
 		});
-		LOGGER.info("完成获取实体: {}", stt.getString());
-		
+		LOGGER.info("完成获取实体: {}", partStt.getString());
+	}
+	
+	private void collectEnchant() {
+		LOGGER.info("开始获取附魔");
+		frame.setTextMajor("获取附魔");
+		var list = BuiltInRegistries.ENCHANTMENT.entrySet().stream()
+				.filter(i -> i.getKey().location().getNamespace().equals(modid))
+				.toList();
+		list.forEach(i -> {
+			ResourceLocation location = i.getKey().location();
+			frame.setText("添加附魔: " + location);
+			enchantments.add(new EnchantEntry(location.toString(), i.getValue()));
+		});
+		LOGGER.info("完成获取附魔: {}", partStt.getStringAndReset());
+	}
+	
+	private void collectBiome() {
+		var list = server.registryAccess().registry(Registries.BIOME).orElseThrow().entrySet().stream()
+				.filter(i -> i.getKey().location().getNamespace().equals(modid))
+				.toList();
+		list.forEach(i -> {
+			ResourceLocation location = i.getKey().location();
+			frame.setText("添加群系: " + location);
+			biomes.add(new NameEntry(location.toString(), byId(location.getPath())));
+		});
+		LOGGER.info("完成获取群系: {}", partStt.getStringAndReset());
 	}
 	
 	private void collectEffect() {
@@ -203,10 +324,11 @@ public class Exporter {
 		float delta = 0.2f / list.size();
 		ResourceManager manager = instance.getResourceManager();
 		list.forEach(i -> {
-			frame.setText("添加药水效果: " + i.getKey().location());
+			ResourceLocation location = i.getKey().location();
+			frame.setText("添加药水效果: " + location);
 			MobEffect value = i.getValue();
-			EffectEntry e = new EffectEntry(i.getKey().location().toString(), value);
-			Optional<Resource> resource = manager.getResource(i.getKey().location().withPrefix("textures/mob_effect/").withSuffix(".png"));
+			EffectEntry e = new EffectEntry(location.toString(), value);
+			Optional<Resource> resource = manager.getResource(location.withPrefix("textures/mob_effect/").withSuffix(".png"));
 			resource.ifPresent((tex) -> {
 				try (InputStream open = tex.open()) {
 					byte[] png = open.readAllBytes();
@@ -219,12 +341,10 @@ public class Exporter {
 			});
 			frame.addProcess(delta, 0.4f, 0.5f);
 		});
-		LOGGER.info("完成获取药水效果: {}", stt.getString());
-		
+		LOGGER.info("完成获取药水效果: {}", partStt.getStringAndReset());
 	}
 	
 	private void collectRecipe() throws IOException {
-		Timer stt = new Timer();
 		LOGGER.info("开始获取配方");
 		frame.setTextMajor("获取配方");
 		ResourceManager data = Objects.requireNonNull(instance.getSingleplayerServer()).getResourceManager();
@@ -239,38 +359,41 @@ public class Exporter {
 			recipes.add(json);
 			frame.addProcess(delta, 0.5f, 0.7f);
 		}
-		LOGGER.info("完成获取配方: {}", stt.getString());
+		LOGGER.info("完成获取配方: {}", partStt.getStringAndReset());
 	}
 	
 	private void collectLang() {
-		Timer stt = new Timer();
 		LOGGER.info("开始获取语言");
 		frame.setTextMajor("获取语言");
-		ClientLanguage zh = ClientLanguage.loadFrom(instance.getResourceManager(), List.of("en_us", "zh_cn"), false);
-		ClientLanguage en = ClientLanguage.loadFrom(instance.getResourceManager(), List.of("en_us"), false);
-		float delta = 0.14f / (items.size() + entities.size());
-		Language rawl = Language.getInstance();
-		for (List<? extends Localizable> s : locals) {
-			frame.setText("获取I18n(英)");
-			Language.inject(en);
-			for (Localizable localizable : s) {
-				localizable.setEn(localizable.getName().getString());
-				frame.addProcess(delta, 0.70f, 0.84f);
-			}
-			frame.setText("获取I18n(英)");
-			Language.inject(zh);
-			for (Localizable localizable : s) {
-				localizable.setZh(localizable.getName().getString());
-				frame.addProcess(delta, 0.70f, 0.84f);
+		int tot = locals.stream().map(List::size).reduce(0, Integer::sum);
+		if (tot != 0) {
+			ClientLanguage zh = ClientLanguage.loadFrom(instance.getResourceManager(), List.of("en_us", "zh_cn"), false);
+			ClientLanguage en = ClientLanguage.loadFrom(instance.getResourceManager(), List.of("en_us"), false);
+			float delta = 0.07f / tot;
+			
+			synchronized (I18N_LOCK) {
+				Language rawl = Language.getInstance();
+				for (List<? extends Localizable> s : locals) {
+					frame.setText("获取I18n(英)");
+					Language.inject(en);
+					for (Localizable localizable : s) {
+						localizable.setEn(localizable.getName().getString());
+						frame.addProcess(delta);//0.7-0.77
+					}
+					frame.setText("获取I18n(英)");
+					Language.inject(zh);
+					for (Localizable localizable : s) {
+						localizable.setZh(localizable.getName().getString());
+						frame.addProcess(delta);//0.77-0.84
+					}
+				}
+				Language.inject(rawl);
 			}
 		}
-		Language.inject(rawl);
-		LOGGER.info("完成获取语言: {}", stt.getString());
-		
+		LOGGER.info("完成获取语言: {}", partStt.getStringAndReset());
 	}
 	
 	private void write() throws IOException {
-		Timer stt = new Timer();
 		LOGGER.info("开始写入");
 		
 		String head = "#format " + MOD_ID + "@" + MOD_VERSION +
@@ -279,37 +402,53 @@ public class Exporter {
 		
 		frame.setTextMajor("序列化");
 		
+		//0.84
 		frame.setText("序列化配方");
 		List<String> rl = storeRaw(recipes.stream());
-		frame.addProcess(0.02f);//0.84
+		frame.addProcess(0.01f);
 		frame.setText("序列化物品");
-		List<String> il = store(items);
-		frame.addProcess(0.02f);//0.86
+		var il = store(items);
+		frame.addProcess(0.02f);
 		frame.setText("序列化药水效果");
-		List<String> effl = store(effects);
-		frame.addProcess(0.02f);//0.86
+		var effl = store(effects);
+		frame.addProcess(0.01f);
+		frame.setText("序列化附魔");
+		var enl = store(enchantments);
+		frame.addProcess(0.01f);
 		frame.setText("序列化实体");
-		List<String> el = store(entities);
-		frame.addProcess(0.02f);//0.90
+		var el = store(entities);
+		frame.addProcess(0.02f);
+		frame.setText("序列化群系");
+		var biol = store(biomes);
+		frame.addProcess(0.01f);
+		//0.90
 		
 		
 		frame.setTextMajor("写入 output.zip");
 		try (var out = new ZipOutputStream(outputs_zip)) {
 			if (!rl.isEmpty()) {
-				frame.setTextMajor("写入 recipes.jsons");
+				frame.setText("写入 recipes.jsons");
 				write(out, "recipes.jsons", rl, head + "\n#types " + recipeTypes);
 			}
-			if (!il.isEmpty()) {
-				frame.setTextMajor("写入 items.jsons");
-				write(out, "items.jsons", il, head);
+			if (il != null) {
+				frame.setText("写入 items.jsons");
+				write(out, "items.jsons", il.getFirst(), head + "\n#format " + il.getSecond());
 			}
-			if (!el.isEmpty()) {
-				frame.setTextMajor("写入 entites.jsons");
-				write(out, "entites.jsons", el, head);
+			if (el != null) {
+				frame.setText("写入 entites.jsons");
+				write(out, "entites.jsons", el.getFirst(), head + "\n#format " + el.getSecond());
 			}
-			if (!effl.isEmpty()) {
-				frame.setTextMajor("写入 effects.jsons");
-				write(out, "effects.jsons", effl, head);
+			if (effl != null) {
+				frame.setText("写入 effects.jsons");
+				write(out, "effects.jsons", effl.getFirst(), head + "\n#format " + effl.getSecond());
+			}
+			if (enl != null) {
+				frame.setText("写入 enchantments.jsons");
+				write(out, "enchantments.jsons", enl.getFirst(), head + "\n#format " + enl.getSecond());
+			}
+			if (biol != null) {
+				frame.setText("写入 biomes.jsons");
+				write(out, "biomes.jsons", biol.getFirst(), head + "\n#format " + biol.getSecond());
 			}
 		}
 		frame.addProcess(0.05f);
@@ -342,7 +481,7 @@ public class Exporter {
 		frame.setTextMajor("完毕！");
 		frame.finished(root);
 		
-		LOGGER.info("完成写入: {}", stt.getString());
+		LOGGER.info("完成写入: {}", partStt.getStringAndReset());
 		
 	}
 	
@@ -358,15 +497,23 @@ public class Exporter {
 		out.closeEntry();
 	}
 	
-	private static List<String> store(List<? extends Storable> storables) {
-		return storeRaw(storables.stream().map(i -> {
-			JsonObject object = new JsonObject();
-			i.store(object);
-			return object;
+	private Pair<List<String>, String> store(List<? extends Storable> storables) {
+		if (storables.isEmpty()) return null;
+		var ref = new Object() {
+			String format = null;
+		};
+		List<String> st = storeRaw(storables.stream().map(storable -> {
+			Pair<JsonObject, String> stored = dataStorer.store(storable);
+			if (ref.format == null) ref.format = stored.getSecond();
+			else if (!ref.format.equals(stored.getSecond())) {
+				throw new UnsupportedOperationException("同一类型的条目导出格式不同");
+			}
+			return stored.getFirst();
 		}));
+		return Pair.of(st, ref.format);
 	}
 	
-	private static List<String> storeRaw(Stream<JsonObject> objects) {
+	private List<String> storeRaw(Stream<JsonObject> objects) {
 		LinkedList<String> list = new LinkedList<>();
 		objects.forEach(s -> list.add(s.toString()));
 		return list;

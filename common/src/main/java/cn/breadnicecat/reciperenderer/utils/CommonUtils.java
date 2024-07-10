@@ -18,6 +18,23 @@ public class CommonUtils {
 		return StackLocatorUtil.getCallerClass(3);//因为要再调用getCaller(int)所以要+1
 	}
 	
+		/**
+	 * 从注册名中获取名称
+	 *
+	 * @return 将id中的下划线替换为空格，并且每个空格后第一个字母大写
+	 * <p>
+	 * 例如{@code 输入this_is_a_example 返回 This Is A Example}
+	 */
+	
+	public static String byId(String id) {
+		StringBuilder sb = new StringBuilder();
+		String[] s = id.split("_");
+		for (String s1 : s) {
+			sb.append(s1.substring(0, 1).toUpperCase()).append(s1.substring(1)).append(" ");
+		}
+		return sb.substring(0, sb.length() - 1);
+	}
+	
 	/**
 	 * @param depth 从深度1(此方法)开始,2调用这个方法的方法,3调用调用这个方法的方法...
 	 */

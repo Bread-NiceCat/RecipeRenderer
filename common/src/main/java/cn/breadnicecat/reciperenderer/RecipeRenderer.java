@@ -1,11 +1,12 @@
 package cn.breadnicecat.reciperenderer;
 
 import cn.breadnicecat.reciperenderer.cmd.ICmdFeedback;
-import cn.breadnicecat.reciperenderer.utils.LogUtils;
+import cn.breadnicecat.reciperenderer.datafix.DataStorer;
 import dev.architectury.injectables.annotations.ExpectPlatform;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import org.slf4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.stream.Stream;
 
@@ -24,7 +25,7 @@ public class RecipeRenderer {
 	public static final String MOD_ID = "reciperenderer";
 	public static final String MOD_NAME = "Recipe Renderer";
 	public static final String MOD_VERSION = getVersion(MOD_ID);
-	private static final Logger LOGGER = LogUtils.sign();
+	public static final Logger LOGGER = LogManager.getLogger(MOD_NAME);
 	
 	static {
 		LOGGER.info("Loading {} !", MOD_NAME);
@@ -51,23 +52,26 @@ public class RecipeRenderer {
 	}
 	
 	@ExpectPlatform
-	public static String getVersion(String modid) {
-		return impossibleCode();
-	}
-	
-	@ExpectPlatform
 	public static Platform getPlatform() {
 		return impossibleCode();
 	}
 	
+	@ExpectPlatform
+	public static String getVersion(String modid) {
+		return impossibleCode();
+	}
 	
 	public enum Platform {
 		FORGE, FABRIC
 	}
 	
 	
-	public static int export(String modid, ICmdFeedback callback) {
-		new Exporter().run(modid, callback);
+	public static int export(String modid, ICmdFeedback callback, DataStorer storer) {
+		try {
+			new Exporter(modid).run(callback, storer);
+		} catch (Exception e) {
+			return -1;
+		}
 		return 1;
 	}
 	

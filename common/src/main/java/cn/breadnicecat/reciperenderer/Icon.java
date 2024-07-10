@@ -21,7 +21,8 @@ import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix4f;
 
 import java.io.IOException;
-import java.util.Base64;
+
+import static cn.breadnicecat.reciperenderer.Exporter.BASE64;
 
 
 /**
@@ -35,7 +36,6 @@ import java.util.Base64;
  * <p>
  **/
 public class Icon {
-	public static final Base64.Encoder ENCODER = Base64.getEncoder();
 	private final RenderTarget target;
 	private PoseStack pose;
 	NativeImage image;
@@ -73,7 +73,7 @@ public class Icon {
 	
 	public String getBase64() {
 		try {
-			return ENCODER.encodeToString(image.asByteArray());
+			return BASE64.encodeToString(image.asByteArray());
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
