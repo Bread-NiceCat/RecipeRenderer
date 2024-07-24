@@ -26,6 +26,7 @@ public class ExportProcessFrame {
 	protected int process = 0;
 	protected boolean cancel = false;
 	private static final int MAX = 10000;
+	private Thread daemon = null;
 	
 	public ExportProcessFrame(String modid) {
 		// 创建窗口
@@ -69,8 +70,14 @@ public class ExportProcessFrame {
 		int y = (screenSize.height - frameSize.height) / 2;
 		// 设置窗口位置
 		frame.setLocation(x, y);
-		// 显示窗口
+	}
+	
+	public void show() {
 		frame.setVisible(true);
+	}
+	
+	public void setDaemon(Thread toDaemon) {
+		daemon = toDaemon;
 	}
 	
 	protected ExportProcessFrame() {
@@ -93,8 +100,7 @@ public class ExportProcessFrame {
 		this.process = process;
 		progressBar.setValue(process);
 		//max 分为 100 份 每一份是 0.1%
-		
-		progressBar.setString("%.1f %s".formatted(process / SPLIT, "%"));
+		progressBar.setString((process / SPLIT) + " %");
 	}
 	
 	public void setProcess(float processPercent) {
@@ -151,6 +157,9 @@ public class ExportProcessFrame {
 		return cancel;
 	}
 	
+	public void hide() {
+		frame.setVisible(false);
+	}
 	
 	public void finished(File toOpen) {
 		checkCancel();
@@ -190,8 +199,16 @@ public class ExportProcessFrame {
 	}
 	
 	protected void checkCancel() {
+		var daemon = this.daemon;
+		if (daemon != null) {
+			if (!daemon.isAlive()) {
+				cancel();
+				label.setText("主线程死亡,详看日志");
+				throw new RuntimeException("主线程死亡");
+			}
+		}
 		if (cancel) {
-			throw new RuntimeException("已取消");
+			throw new ExportCancelledException();
 		}
 	}
 	
@@ -232,10 +249,6 @@ public class ExportProcessFrame {
 		
 		@Override
 		protected void cancel() {
-		}
-		
-		public Empty(String modid) {
-			super(modid);
 		}
 		
 		@Override
@@ -283,11 +296,26 @@ public class ExportProcessFrame {
 		@Override
 		public void addProcess(float delta, float ceilPercent) {
 		}
+		
+		public Empty(String modid) {
+			super(modid);
+		}
+		
+		@Override
+		public void show() {
+			super.show();
+		}
+		
+		@Override
+		public void hide() {
+			super.hide();
+		}
 	}
 	
 	public static void main(String[] args) {
 		ExportProcessFrame frame1 = new ExportProcessFrame("minecraft");
-		frame1.setText("<html><body><p align=\"center\">数据版本<br/>v1.0.0</p></body></html>");
+		frame1.setText("<html><body><p align=\"center\">TEST1 test1<br/>v11.45.14</p></body></html>");
+		frame1.show();
 		var ref = new Object() {
 			Timer timer;
 		};

@@ -2,15 +2,10 @@ package cn.breadnicecat.reciperenderer;
 
 import cn.breadnicecat.reciperenderer.cmd.ICmdFeedback;
 import cn.breadnicecat.reciperenderer.datafix.DataStorer;
-import dev.architectury.injectables.annotations.ExpectPlatform;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
-import java.util.stream.Stream;
-
-import static cn.breadnicecat.reciperenderer.utils.CommonUtils.impossibleCode;
 
 /**
  * Created in 2024/7/8 下午5:11
@@ -24,8 +19,9 @@ import static cn.breadnicecat.reciperenderer.utils.CommonUtils.impossibleCode;
 public class RecipeRenderer {
 	public static final String MOD_ID = "reciperenderer";
 	public static final String MOD_NAME = "Recipe Renderer";
-	public static final String MOD_VERSION = getVersion(MOD_ID);
+	public static String modVersion = "undefined";
 	public static final Logger LOGGER = LogManager.getLogger(MOD_NAME);
+	public static RPlatform RR;
 	
 	static {
 		LOGGER.info("Loading {} !", MOD_NAME);
@@ -33,38 +29,30 @@ public class RecipeRenderer {
 		try {
 			System.setProperty("java.awt.headless", "false");
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOGGER.error("取消Headless失败", e);
 		}
 	}
 	
 	@Environment(EnvType.CLIENT)
-	public static void init() {
+	public static void init(RPlatform rr) {
+		RecipeRenderer.RR = rr;
+		try {
+			modVersion = RR.getVersion(MOD_ID);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 	
-	@ExpectPlatform
-	public static Stream<String> listMods() {
-		return impossibleCode();
-	}
-	
-	@ExpectPlatform
-	public static boolean isLoaded(String modid) {
-		return impossibleCode();
-	}
-	
-	@ExpectPlatform
-	public static Platform getPlatform() {
-		return impossibleCode();
-	}
-	
-	@ExpectPlatform
-	public static String getVersion(String modid) {
-		return impossibleCode();
-	}
 	
 	public enum Platform {
 		FORGE, FABRIC
 	}
 	
+	
+	public static int exportAll(ICmdFeedback callback, DataStorer storer) {
+		return RR.listMods().map(i -> export(i, callback, storer) == 1).reduce(true, (a, b) -> a & b)
+				? 1 : -1;
+	}
 	
 	public static int export(String modid, ICmdFeedback callback, DataStorer storer) {
 		try {

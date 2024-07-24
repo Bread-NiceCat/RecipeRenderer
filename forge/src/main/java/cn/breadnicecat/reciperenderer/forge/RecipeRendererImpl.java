@@ -3,7 +3,7 @@ package cn.breadnicecat.reciperenderer.forge;
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
 import cn.breadnicecat.reciperenderer.cmd.ICmdFeedback;
 import cn.breadnicecat.reciperenderer.cmd.ModidArgumentType;
-import cn.breadnicecat.reciperenderer.datafix.IconrStorer;
+import cn.breadnicecat.reciperenderer.datafix.IconRStorer;
 import cn.breadnicecat.reciperenderer.datafix.RRStorer;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
@@ -11,14 +11,9 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraftforge.client.event.RegisterClientCommandsEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.forgespi.language.IModInfo;
 
-import java.util.stream.Stream;
-
-import static cn.breadnicecat.reciperenderer.RecipeRenderer.MOD_ID;
-import static cn.breadnicecat.reciperenderer.RecipeRenderer.export;
+import static cn.breadnicecat.reciperenderer.RecipeRenderer.*;
 import static cn.breadnicecat.reciperenderer.utils.CommonUtils.accept;
 import static net.minecraft.commands.Commands.argument;
 import static net.minecraft.commands.Commands.literal;
@@ -35,39 +30,33 @@ import static net.minecraft.commands.Commands.literal;
 @Mod(MOD_ID)
 public class RecipeRendererImpl {
 	public RecipeRendererImpl() {
-		RecipeRenderer.init();
+		RecipeRenderer.init(new ForgeRPlatform());
 		MinecraftForge.EVENT_BUS.addListener(this::onRegisterClientCommands);
 	}
+	
+	private ICmdFeedback create(CommandSourceStack source) {
+		return ICmdFeedback.create(source::getEntity, source::sendSystemMessage, source::sendFailure);
+	}
+	
 	
 	@SubscribeEvent
 	public void onRegisterClientCommands(RegisterClientCommandsEvent event) {
 		CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
 		
 		accept(root -> {
-					Command<CommandSourceStack> mod_rr = s -> {
+					Command<CommandSourceStack> mod_rr = (s) -> {
 						String modid = s.getArgument("modid", String.class);
-						var source = s.getSource();
-						return export(modid, ICmdFeedback.create(source::getEntity, source::sendSystemMessage, source::sendFailure), RRStorer.INSTANCE);
+						return export(modid, create(s.getSource()), RRStorer.INSTANCE);
 					};
 					Command<CommandSourceStack> mod_iconr = s -> {
 						String modid = s.getArgument("modid", String.class);
-						var source = s.getSource();
-						return export(modid, ICmdFeedback.create(source::getEntity, source::sendSystemMessage, source::sendFailure), new IconrStorer(RRStorer.INSTANCE));
+						return export(modid, create(s.getSource()), IconRStorer.DEFAULT);
 					};
-					Command<CommandSourceStack> all_rr = s -> {
-						boolean suc = listMods().map(e -> {
-							var source = s.getSource();
-							return export(e, ICmdFeedback.create(source::getEntity, source::sendSystemMessage, source::sendFailure), RRStorer.INSTANCE) == 1;
-						}).reduce(true, (a, b) -> a && b);
-						return suc ? 1 : -1;
-					};
-					Command<CommandSourceStack> all_iconr = s -> {
-						boolean suc = listMods().map(e -> {
-							var source = s.getSource();
-							return export(e, ICmdFeedback.create(source::getEntity, source::sendSystemMessage, source::sendFailure), new IconrStorer(RRStorer.INSTANCE)) == 1;
-						}).reduce(true, (a, b) -> a && b);
-						return suc ? 1 : -1;
-					};
+					Command<CommandSourceStack> all_rr =
+							s -> exportAll(create(s.getSource()), RRStorer.INSTANCE);
+					Command<CommandSourceStack> all_iconr =
+							s -> exportAll(create(s.getSource()), IconRStorer.DEFAULT);
+					
 					
 					dispatcher.register(
 							root.then(literal("export")
@@ -92,18 +81,5 @@ public class RecipeRendererImpl {
 				, literal(MOD_ID), literal("rr"));
 	}
 	
-	public static Stream<String> listMods() {
-		return ModList.get().getMods().stream().map(IModInfo::getModId);
-	}
 	
-	public static boolean isLoaded(String modid) {
-		return ModList.get().isLoaded(modid);
-	}
-	
-	public static String getVersion(String modid) {
-		return ModList.get().getModFileById(modid).versionString();
-	}
-	public static RecipeRenderer.Platform getPlatform() {
-		return RecipeRenderer.Platform.FORGE;
-	}
 }

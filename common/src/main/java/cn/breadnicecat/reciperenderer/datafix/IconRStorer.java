@@ -17,11 +17,11 @@ import java.util.Arrays;
  *
  * <p>
  **/
-public class IconrStorer implements DataStorer {
-	
+public class IconRStorer implements DataStorer {
+	public static final IconRStorer DEFAULT = new IconRStorer(RRStorer.INSTANCE);
 	private final DataStorer parent;
 	
-	public IconrStorer(DataStorer parent) {
+	public IconRStorer(DataStorer parent) {
 		this.parent = parent;
 	}
 	

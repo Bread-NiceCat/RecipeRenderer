@@ -29,7 +29,10 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.Item;
 import org.jetbrains.annotations.Nullable;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Stream;
@@ -51,9 +54,7 @@ import static net.minecraft.network.chat.Component.literal;
  **/
 @Environment(EnvType.CLIENT)
 public class Exporter {
-	static final Object LOCK = new Object();
 	static final Object I18N_LOCK = new Object();
-	static volatile int ran = 0;
 	
 	public static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
 	public static final Base64.Encoder BASE64 = Base64.getEncoder();
@@ -69,8 +70,8 @@ public class Exporter {
 	ExportProcessFrame frame;
 	File root;
 	
-	FileOutputStream outputs_zip;
-	FileOutputStream images_zip;
+	ZipOutputStream outputs_z;
+	ZipOutputStream images_z;
 	
 	List<ItemEntry> items = new LinkedList<>();
 	List<EntityEntry> entities = new LinkedList<>();
@@ -116,8 +117,6 @@ public class Exporter {
 		}
 		RenderSystem.assertOnRenderThread();
 		
-		suspend();
-		
 		ExportProcessFrame frame;
 		try {
 			frame = new ExportProcessFrame(modid);
@@ -126,20 +125,23 @@ public class Exporter {
 			softFail(e);
 			frame = ExportProcessFrame.empty();
 		}
+		frame.setDaemon(Thread.currentThread());
 		this.frame = frame;
+		Util.backgroundExecutor().submit(() -> this.frame.show());
 		
 		try {
 			this.root = new File(instance.gameDirectory, "rr_export/" + modid);
+			File outfile = new File(root, "output.zip");
+			File imgfile = new File(root, "images.zip");
 			root.mkdirs();
 			//防止出现最后因为文件而无法导出的情况
-			File outfile = new File(root, "output.zip");
-			outputs_zip = new FileOutputStream(outfile);
-			File imgfile = new File(root, "images.zip");
-			images_zip = new FileOutputStream(imgfile);
+			//先占茅坑(bushi
+			outputs_z = new ZipOutputStream(new FileOutputStream(outfile));
+			images_z = new ZipOutputStream(new FileOutputStream(imgfile));
 			if (tryRun(this::collectItem, items::clear)) return;
 			if (tryRun(this::collectEntity, entities::clear)) return;
 			Util.backgroundExecutor().submit(() -> {
-				try {
+				try (var z1 = outputs_z; var z2 = images_z) {
 					if (tryRun(this::collectRecipe, recipes::clear)) return;
 					if (tryRun(this::collectEffect, effects::clear)) return;
 					if (tryRun(this::collectEnchant, enchantments::clear)) return;
@@ -154,6 +156,8 @@ public class Exporter {
 					int encs = enchantments.size();
 					if ((rs | rts | is | effs | es | bios | encs) == 0) {
 						feedback.sendFeedback(literal(modid + "无条目可导出").withStyle(ChatFormatting.YELLOW));
+						outputs_z.close();
+						images_z.close();
 						imgfile.delete();
 						outfile.delete();
 						root.delete();
@@ -162,6 +166,7 @@ public class Exporter {
 					}
 					
 					collectLang();//sync
+					
 					write();
 					var ref = new Object() {
 						StringBuilder text = new StringBuilder("<html><body>共计导出了");
@@ -197,48 +202,16 @@ public class Exporter {
 					this.frame.setText(conTime);
 				} catch (Exception e) {
 					fastFail(e);
-				} finally {
-					resume();
 				}
 			});
 		} catch (Exception e) {
 			fastFail(e);
-			resume();
 		}
 	}
 	
-	@SuppressWarnings("removal")
-	private void resume() {
-		synchronized (LOCK) {
-			if (--ran == 0) {
-				try {
-					LOGGER.info("恢复服务器线程");
-					server.getRunningThread().resume();
-				} catch (Exception e) {
-					softFail(e);
-					feedback.sendError(literal("无法恢复服务器线程"));
-				}
-			}
-		}
-	}
-	
-	@SuppressWarnings("removal")
-	private void suspend() {
-		synchronized (LOCK) {
-			if (ran++ == 0) {
-				try {
-					LOGGER.info("暂停服务器线程");
-					server.getRunningThread().suspend();
-				} catch (Exception e) {
-					softFail(e);
-					feedback.sendError(literal("无法暂停服务器线程"));
-				}
-			}
-		}
-	}
 	
 	private void softFail(Exception e) {
-		e.printStackTrace();
+		LOGGER.error("出错了!", e);
 		if (frame != null) {
 			if (frame.isCancel()) {
 				frame.revalidate();
@@ -395,11 +368,18 @@ public class Exporter {
 	
 	private void write() throws IOException {
 		LOGGER.info("开始写入");
-		
-		String head = "#format " + MOD_ID + "@" + MOD_VERSION +
-				"\n#env minecraft@" + getVersion("minecraft") + "&" + getPlatform().toString().toLowerCase() +
-				"\n#target " + modid + "@" + getVersion(modid);
-		
+		String head;
+		StringBuilder headBuilder = new StringBuilder();
+		try {
+			headBuilder.append("#provider ").append(MOD_ID).append("@" + modVersion)
+					.append("\n#target ").append(modid).append("@").append(RR.getVersion(modid))
+					.append("\n#env minecraft@").append(RR.getVersion("minecraft")).append("&").append(RR.getPlatform().toString().toLowerCase());
+			
+		} catch (Exception e) {
+			LOGGER.info("文件头获取失败");
+			softFail(e);
+		}
+		head = headBuilder.toString();
 		frame.setTextMajor("序列化");
 		
 		//0.84
@@ -425,7 +405,7 @@ public class Exporter {
 		
 		
 		frame.setTextMajor("写入 output.zip");
-		try (var out = new ZipOutputStream(outputs_zip)) {
+		try (var out = outputs_z) {
 			if (!rl.isEmpty()) {
 				frame.setText("写入 recipes.jsons");
 				write(out, "recipes.jsons", rl, head + "\n#types " + recipeTypes);
@@ -454,26 +434,26 @@ public class Exporter {
 		frame.addProcess(0.05f);
 		
 		frame.setTextMajor("写入 images.zip");
-		try (var out = new ZipOutputStream(images_zip)) {
+		try (var out = images_z) {
 			for (ItemEntry item : items) {
 				String s = item.id.split(":", 2)[1] + ".png";
 				frame.setText("写入 item32/" + s);
-				out.putNextEntry(new ZipEntry("item32/" + s));
+				out.putNextEntry(createEntry("item32/" + s));
 				out.write(item.ico32.getImage().asByteArray());
 				frame.setText("写入 item128/" + s);
-				out.putNextEntry(new ZipEntry("item128/" + s));
+				out.putNextEntry(createEntry("item128/" + s));
 				out.write(item.ico128.getImage().asByteArray());
 			}
 			for (EntityEntry entity : entities) {
 				String s = entity.id.split(":", 2)[1] + ".png";
 				frame.setText("写入 entity/" + s);
-				out.putNextEntry(new ZipEntry("entity/" + s));
+				out.putNextEntry(createEntry("entity/" + s));
 				out.write(entity.ico.getImage().asByteArray());
 			}
 			for (EffectEntry effect : effects) {
 				String s = effect.id.split(":", 2)[1] + ".png";
 				frame.setText("写入 effect/" + s);
-				out.putNextEntry(new ZipEntry("effect/" + s));
+				out.putNextEntry(createEntry("effect/" + s));
 				out.write(effect.icoRaw);
 				
 			}
@@ -485,15 +465,19 @@ public class Exporter {
 		
 	}
 	
+	private ZipEntry createEntry(String path) {
+		ZipEntry entry = new ZipEntry(path);
+		return entry;
+	}
+	
 	void write(ZipOutputStream out, String fileName, List<String> lines, String head) throws IOException {
-		out.putNextEntry(new ZipEntry(fileName));
-		OutputStreamWriter writer = new OutputStreamWriter(out, StandardCharsets.UTF_8);
-		writer.write(head);
+		out.putNextEntry(createEntry(fileName));
+		var writer = new StringBuilder();
+		writer.append(head);
 		for (String line : lines) {
-			writer.write("\n");
-			writer.write(line);
+			writer.append("\n").append(line);
 		}
-		writer.flush();
+		out.write(writer.toString().getBytes(StandardCharsets.UTF_8));
 		out.closeEntry();
 	}
 	

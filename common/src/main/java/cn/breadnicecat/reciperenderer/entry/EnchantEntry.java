@@ -21,13 +21,14 @@ public class EnchantEntry implements Localizable, Storable {
 	public int max;
 	public String zh;
 	public String en;
+	public String support;
 	
 	public EnchantEntry(String id, Enchantment value) {
 		this.id = id;
 		this.value = value;
 		min = value.getMinLevel();
 		max = value.getMaxLevel();
-		
+		support = value.category.toString().toLowerCase();
 	}
 	
 	@Override
@@ -50,6 +51,7 @@ public class EnchantEntry implements Localizable, Storable {
 		object.addProperty("id", id);
 		object.addProperty("en", en);
 		object.addProperty("zh", zh);
+		object.addProperty("support", support);
 		object.addProperty("min", min);
 		object.addProperty("max", max);
 	}
