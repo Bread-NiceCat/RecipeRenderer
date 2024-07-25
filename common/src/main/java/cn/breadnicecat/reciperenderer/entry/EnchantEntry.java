@@ -2,6 +2,7 @@ package cn.breadnicecat.reciperenderer.entry;
 
 import com.google.gson.JsonObject;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.enchantment.Enchantment;
 
 /**
@@ -16,14 +17,14 @@ import net.minecraft.world.item.enchantment.Enchantment;
 public class EnchantEntry implements Localizable, Storable {
 	final Enchantment value;
 	
-	public String id;
+	public ResourceLocation id;
 	public int min;
 	public int max;
 	public String zh;
 	public String en;
 	public String support;
 	
-	public EnchantEntry(String id, Enchantment value) {
+	public EnchantEntry(ResourceLocation id, Enchantment value) {
 		this.id = id;
 		this.value = value;
 		min = value.getMinLevel();
@@ -47,12 +48,13 @@ public class EnchantEntry implements Localizable, Storable {
 	}
 	
 	@Override
-	public void store(JsonObject object) {
-		object.addProperty("id", id);
+	public int store(JsonObject object) {
+		object.addProperty("id", id.toString());
 		object.addProperty("en", en);
 		object.addProperty("zh", zh);
 		object.addProperty("support", support);
 		object.addProperty("min", min);
 		object.addProperty("max", max);
+		return 1;
 	}
 }

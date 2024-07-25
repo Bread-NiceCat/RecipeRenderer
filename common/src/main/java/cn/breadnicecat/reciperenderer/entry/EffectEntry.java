@@ -2,7 +2,11 @@ package cn.breadnicecat.reciperenderer.entry;
 
 import com.google.gson.JsonObject;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.effect.MobEffect;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.function.BiFunction;
 
 /**
  * Created in 2024/7/9 下午11:01
@@ -15,18 +19,15 @@ import net.minecraft.world.effect.MobEffect;
  **/
 public class EffectEntry implements Storable, Localizable {
 	final MobEffect effect;
-	public byte[] icoRaw;
-	public String ico;
-	public String id;
-	public String color;
 	
+	public byte[] ico;
+	public ResourceLocation id;
 	public String zh;
 	public String en;
 	
-	public EffectEntry(String id, MobEffect effect) {
+	public EffectEntry(ResourceLocation id, MobEffect effect) {
 		this.effect = effect;
 		this.id = id;
-		this.color = Integer.toString(effect.getColor(), 16);
 	}
 	
 	@Override
@@ -44,12 +45,17 @@ public class EffectEntry implements Storable, Localizable {
 		this.en = en;
 	}
 	
+	public void setIco(byte[] ico) {
+		this.ico = ico;
+	}
+	
 	@Override
-	public void store(JsonObject object) {
-		object.addProperty("id", id);
+	public int store(BiFunction<String, byte @Nullable [], String> writer, JsonObject object) {
+		object.addProperty("id", id.toString());
 		object.addProperty("en", en);
 		object.addProperty("zh", zh);
-		object.addProperty("ico", ico);
-		object.addProperty("color", color);
+		object.addProperty("ico", writer.apply("attachment/effect/" + id.getPath() + ".png", ico));
+		return 1;
 	}
+	
 }

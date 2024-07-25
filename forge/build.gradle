@@ -13,6 +13,12 @@ loom {
         convertAccessWideners = true
         extraAccessWideners.add loom.accessWidenerPath.get().asFile.name
     }
+    runs {
+        client {
+            vmArg "-Dmixin.debug.export=true"
+            vmArg "-XX:+AllowEnhancedClassRedefinition"
+        }
+    }
 }
 configurations {
     common

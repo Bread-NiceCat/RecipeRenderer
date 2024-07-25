@@ -4,6 +4,12 @@ architectury {
 
 loom {
     accessWidenerPath = file("src/main/resources/reciperenderer.accesswidener")
+    runs {
+        client {
+            vmArg "-Dmixin.debug.export=true"
+            vmArg "-XX:+AllowEnhancedClassRedefinition"
+        }
+    }
 }
 
 

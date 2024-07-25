@@ -1,5 +1,6 @@
-package cn.breadnicecat.reciperenderer;
+package cn.breadnicecat.reciperenderer.render;
 
+import cn.breadnicecat.reciperenderer.utils.PoseOffset;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.platform.GlStateManager;
@@ -20,10 +21,6 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix4f;
 
-import java.io.IOException;
-
-import static cn.breadnicecat.reciperenderer.Exporter.BASE64;
-
 
 /**
  * Created in 2024/7/8 下午9:35
@@ -41,7 +38,7 @@ public class Icon {
 	NativeImage image;
 	final boolean flipY;
 	
-	public Icon(int size, Entity entity) {
+	public Icon(PoseOffset pose, int size, Entity entity) {
 		this.target = new TextureTarget(size, size, true, Minecraft.ON_OSX);
 		flipY = false;
 		this.start();
@@ -50,7 +47,7 @@ public class Icon {
 		image = get();
 	}
 	
-	public Icon(int size, ItemStack itemStack) {
+	public Icon(PoseOffset pose, int size, ItemStack itemStack) {
 		target = new TextureTarget(size, size, true, Minecraft.ON_OSX);
 		flipY = true;
 		start();
@@ -69,14 +66,6 @@ public class Icon {
 	
 	public NativeImage getImage() {
 		return image;
-	}
-	
-	public String getBase64() {
-		try {
-			return BASE64.encodeToString(image.asByteArray());
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
 	}
 	
 	protected void start() {

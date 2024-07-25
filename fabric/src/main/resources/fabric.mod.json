@@ -14,8 +14,6 @@
   "license": "GNU GPL v3",
   "environment": "*",
   "entrypoints": {
-    "fabric-datagen": [
-    ],
     "main": [
       "cn.breadnicecat.reciperenderer.fabric.RecipeRendererImpl"
     ]

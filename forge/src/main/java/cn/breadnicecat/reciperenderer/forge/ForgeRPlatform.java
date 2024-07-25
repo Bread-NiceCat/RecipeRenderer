@@ -32,6 +32,7 @@ public class ForgeRPlatform implements RPlatform {
 		return ModList.get().getModFileById(modid).versionString();
 	}
 	
+	
 	@Override
 	public RecipeRenderer.Platform getPlatform() {
 		return RecipeRenderer.Platform.FORGE;

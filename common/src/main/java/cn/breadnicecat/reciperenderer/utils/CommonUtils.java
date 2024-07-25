@@ -18,7 +18,7 @@ public class CommonUtils {
 		return StackLocatorUtil.getCallerClass(3);//因为要再调用getCaller(int)所以要+1
 	}
 	
-		/**
+	/**
 	 * 从注册名中获取名称
 	 *
 	 * @return 将id中的下划线替换为空格，并且每个空格后第一个字母大写
@@ -52,6 +52,13 @@ public class CommonUtils {
 		}
 	}
 	
+	@SafeVarargs
+	public static <I> void visit(I visitor, Consumer<I>... house) {
+		for (Consumer<I> h : house) {
+			h.accept(visitor);
+		}
+	}
+	
 	@Contract()//把->fail顶掉
 	public static <T> T impossibleCode() {
 		throw new AssertionError("Impossible code invoked. It's a bug, please report it to us");
@@ -64,4 +71,5 @@ public class CommonUtils {
 	public static <T> T orElse(T value, Supplier<T> defaultValue) {
 		return value == null ? defaultValue.get() : value;
 	}
+	
 }
