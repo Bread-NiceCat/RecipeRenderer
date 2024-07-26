@@ -33,27 +33,28 @@ import org.joml.Matrix4f;
  * <p>
  **/
 public class Icon {
-	private final RenderTarget target;
-	private PoseStack pose;
+	private RenderTarget target;
+	private PoseStack modelView;
+	
+	PoseOffset offset;
 	NativeImage image;
 	final boolean flipY;
 	
 	public Icon(PoseOffset pose, int size, Entity entity) {
-		this.target = new TextureTarget(size, size, true, Minecraft.ON_OSX);
+		offset = pose;
 		flipY = false;
-		this.start();
+		entity.noCulling = true;
+		this.start(size);
 		this.renderEntity(entity);
 		this.end();
-		image = get();
 	}
 	
 	public Icon(PoseOffset pose, int size, ItemStack itemStack) {
-		target = new TextureTarget(size, size, true, Minecraft.ON_OSX);
+		offset = pose;
 		flipY = true;
-		start();
+		start(size);
 		render(itemStack, Minecraft.getInstance().getItemRenderer());
 		end();
-		image = get();
 	}
 	
 	private NativeImage get() {
@@ -68,10 +69,11 @@ public class Icon {
 		return image;
 	}
 	
-	protected void start() {
-		this.pose = RenderSystem.getModelViewStack();
-		this.pose.pushPose();
-		this.pose.setIdentity();
+	protected void start(int size) {
+		target = new TextureTarget(size, size, true, Minecraft.ON_OSX);
+		this.modelView = RenderSystem.getModelViewStack();
+		this.modelView.pushPose();
+		this.modelView.setIdentity();
 		
 		RenderSystem.backupProjectionMatrix();
 		Matrix4f p = new Matrix4f().setOrtho(0, 16, 16, 0, -150, 150);
@@ -83,28 +85,34 @@ public class Icon {
 	
 	protected void end() {
 		RenderSystem.restoreProjectionMatrix();
-		this.pose.popPose();
+		this.modelView.popPose();
 		
 		this.target.unbindWrite();
 		this.target.unbindRead();
+		
+		image = get();
 	}
 	
 	protected void render(ItemStack stack, ItemRenderer renderer) {
 		this.render(stack, renderer.getModel(stack, null, null, 0), renderer);
 	}
 	
+	/**
+	 * @see net.minecraft.client.gui.GuiGraphics#renderItem(net.minecraft.world.entity.LivingEntity, net.minecraft.world.level.Level, net.minecraft.world.item.ItemStack, int, int, int, int)
+	 */
 	protected void render(ItemStack stack, BakedModel model, ItemRenderer renderer) {
 		RenderSystem.setShaderTexture(0, InventoryMenu.BLOCK_ATLAS);
 		RenderSystem.enableBlend();
 		RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
 		RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-		PoseStack matrixStack = RenderSystem.getModelViewStack();
-		matrixStack.pushPose();
+		modelView.pushPose();
 		{
-			matrixStack.translate(0, 0, 100.0F);
-			matrixStack.translate(8.0D, 8.0D, 0.0D);
-			matrixStack.scale(1.0F, -1.0F, 1.0F);
-			matrixStack.scale(16.0F, 16.0F, 16.0F);
+			offset.apply(modelView);
+			modelView.translate(0, 0, 100.0F);
+			modelView.translate(8.0D, 8.0D, 0.0D);
+			modelView.scale(1.0F, -1.0F, 1.0F);
+			modelView.scale(16.0F, 16.0F, 16.0F);
+			
 			RenderSystem.applyModelViewMatrix();
 			PoseStack matrixStack2 = new PoseStack();
 			MultiBufferSource.BufferSource immediate = Minecraft.getInstance().renderBuffers().bufferSource();
@@ -119,32 +127,31 @@ public class Icon {
 				Lighting.setupFor3DItems();
 			}
 		}
-		matrixStack.popPose();
+		modelView.popPose();
 		RenderSystem.applyModelViewMatrix();
 	}
 	
 	public void renderEntity(Entity spawnEntity) {
 		Minecraft client = Minecraft.getInstance();
 		MultiBufferSource.BufferSource immediate = client.renderBuffers().bufferSource();
-		
-		this.pose = RenderSystem.getModelViewStack();
-		this.pose.pushPose();
+		modelView.pushPose();
 		{
-			this.pose.setIdentity();
-			this.pose.mulPose(Axis.XP.rotationDegrees(112.5f));
-			this.pose.scale(2.5f, -2.5f, -2.5f);
-			this.pose.translate(0.75f, 1f, 1f);
-			this.pose.mulPose(Axis.ZP.rotationDegrees(45f));
-			this.pose.translate(-0.75f, 0, 0);
-			this.pose.mulPose(Axis.YP.rotationDegrees(22.5f));
-			this.pose.mulPose(Axis.ZN.rotationDegrees(22.5f));
-			this.pose.translate(0.75f, 0, 0);
+			offset.apply(modelView);
+			modelView.mulPose(Axis.XP.rotationDegrees(112.5f));
+			modelView.scale(2.5f, -2.5f, -2.5f);
+			modelView.translate(0.75f, 1f, 1f);
+			modelView.mulPose(Axis.ZP.rotationDegrees(45f));
+			modelView.translate(-0.75f, 0, 0);
+			modelView.mulPose(Axis.YP.rotationDegrees(22.5f));
+			modelView.mulPose(Axis.ZN.rotationDegrees(22.5f));
+			modelView.translate(0.75f, 0, 0);
+			
 			if (!(client.player == null)) {
 				spawnEntity.setPosRaw(client.player.getX(), client.player.getY(), client.player.getZ());
 			}
-			client.getEntityRenderDispatcher().render(spawnEntity, 0, 0, 0, 0, client.getFrameTime(), this.pose, immediate, 15728880);
+			client.getEntityRenderDispatcher().render(spawnEntity, 0, 0, 0, 0, client.getFrameTime(), this.modelView, immediate, 15728880);
 		}
-		pose.popPose();
+		modelView.popPose();
 		
 	}
 	

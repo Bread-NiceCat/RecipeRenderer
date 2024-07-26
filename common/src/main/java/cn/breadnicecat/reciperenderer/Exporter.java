@@ -143,8 +143,8 @@ public class Exporter {
 	
 	public void render() {
 		items.forEach(i -> {
-			scheduleRender(i.id.getPath() + ".ico32", i.ico32);
-			scheduleRender(i.id.getPath() + ".ico128", i.ico128);
+			scheduleRender(i.id.getPath() + "_ico32", i.ico32);
+			scheduleRender(i.id.getPath() + "_ico128", i.ico128);
 		});
 		entities.forEach(i -> scheduleRender(i.id.getPath() + ".ico128", i.ico));
 	}
@@ -182,13 +182,22 @@ public class Exporter {
 			logger.info("写入配方");
 			writeJson(output, "recipe.jsons", recipes, null);
 			logger.info("反编译配方序列化类");
+			HashMap<Class<?>, byte[]> cache = new HashMap<>();
 			for (Map.Entry<String, Class<?>> entry : recipeTypes.entrySet()) {
 				String k = entry.getKey();
 				output.putNextEntry(newZipEntry("recipe_types/" + k + ".java"));
 				try {
 					Class<?> clz = entry.getValue();
-					logger.infoSilent(clz.getName());
-					output.write(FernFlowerUtils.decompile(clz).getBytes());
+					byte[] bytes = cache.get(clz);
+					logger.infoSilent("decompile " + clz.getName());
+					if (bytes == null) {
+						logger.infoSilent("decompiling...");
+						bytes = FernFlowerUtils.decompile(clz).getBytes();
+						cache.put(clz, bytes);
+					} else {
+						logger.infoSilent("decompile SKIPPED");
+					}
+					output.write(bytes);
 				} catch (Exception e) {
 					logger.error("反编译" + k + "失败", e);
 				} finally {
@@ -283,7 +292,7 @@ public class Exporter {
 	}
 	
 	private void collectBiome() {
-		LOGGER.info("开始获取生物群系");
+		logger.info("开始获取生物群系");
 		var list = server.registryAccess().registry(Registries.BIOME).orElseThrow().entrySet().stream()
 				.filter(i -> i.getKey().location().getNamespace().equals(modid))
 				.toList();
@@ -295,7 +304,7 @@ public class Exporter {
 	}
 	
 	private void collectEffect() {
-		LOGGER.info("开始获取药水效果");
+		logger.info("开始获取药水效果");
 		ResourceManager manager = instance.getResourceManager();
 		BuiltInRegistries.MOB_EFFECT.entrySet().stream()
 				.filter(i -> i.getKey().location().getNamespace().equals(modid))

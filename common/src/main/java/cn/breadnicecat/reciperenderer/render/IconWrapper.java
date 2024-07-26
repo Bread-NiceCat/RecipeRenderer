@@ -19,6 +19,7 @@ import static cn.breadnicecat.reciperenderer.RecipeRenderer.LOGGER;
  **/
 public class IconWrapper {
 	private IconCache icon;
+	private boolean cache;
 	
 	public IconWrapper(Function<PoseOffset, Icon> icon) {
 		this.icon = IconCache.of(icon);
@@ -37,7 +38,9 @@ public class IconWrapper {
 	}
 	
 	public @NotNull Icon getIconBlocking() {
-		return icon.getLastBlocking();
+		Icon icon1 = icon.getLastBlocking();
+		if (!cache) icon.clear();
+		return icon1;
 	}
 	
 	public byte[] getBytesBlocking() {
@@ -49,4 +52,7 @@ public class IconWrapper {
 		}
 	}
 	
+	public void disableCache() {
+		cache = false;
+	}
 }

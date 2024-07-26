@@ -3,6 +3,7 @@ package cn.breadnicecat.reciperenderer;
 import cn.breadnicecat.reciperenderer.gui.ExportFrame;
 import cn.breadnicecat.reciperenderer.render.Icon;
 import cn.breadnicecat.reciperenderer.render.IconWrapper;
+import cn.breadnicecat.reciperenderer.utils.PoseOffset;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
@@ -24,6 +25,7 @@ import javax.swing.border.LineBorder;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.MouseWheelEvent;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
@@ -80,10 +82,13 @@ public class RecipeRenderer {
 		}
 		Util.backgroundExecutor().submit(() -> {
 			try {
-				URLConnection connection = new URL("https://gitee.com/Bread-NiceCat/RecipeRenderer/raw/master/versions.json").openConnection();
+				URL url = new URL("https://gitee.com/Bread-NiceCat/RecipeRenderer/raw/master/versions.json");
+				LOGGER.info("开始获取版本:{}", url);
+				URLConnection connection = url.openConnection();
 				InputStreamReader reader = new InputStreamReader(connection.getInputStream());
 				JsonObject json = GSON.fromJson(reader, JsonObject.class);
 				latestVer = json.get("latest").getAsString();
+				LOGGER.info("获取最新版本: " + latestVer);
 				int[] latest = Arrays.stream(latestVer.split("[.]", 3)).mapToInt(Integer::parseInt).toArray();
 				int[] current = Arrays.stream(modVersion.split("[.]", 3)).mapToInt(Integer::parseInt).toArray();
 				if (latest[0] > current[0] || latest[1] > current[1] || latest[2] > current[2]) {
@@ -101,28 +106,75 @@ public class RecipeRenderer {
 				LOGGER.info("launch test frame");
 				JFrame frame = new JFrame();
 				frame.setSize(256, 256);
-				frame.setVisible(true);
-				
+				frame.setLayout(new BorderLayout());
 				IconWrapper zo = new IconWrapper(p -> {
 					Zombie entity = EntityType.ZOMBIE.create(Minecraft.getInstance().level);
 					return new Icon(p, 128, entity);
 				});
+				zo.disableCache();
 				var ico1 = new JLabel() {
-					void update() {
-						hookRenderer(zo::render);
-						setIcon(new ImageIcon(zo.getBytesBlocking()));
+					PoseOffset last = null;
+					boolean lock;
+					
+					void update(PoseOffset o) {
+						if (lock) return;
+						lock = true;
+						if (last == o) {
+							LOGGER.info("skip {}", o);
+							lock = false;
+						} else hookRenderer(() -> {
+							LOGGER.info("update {}", o);
+							zo.render(last = o);
+							setIcon(new ImageIcon(zo.getBytesBlocking()));
+							lock = false;
+						});
 					}
 				};
-				ico1.setBorder(new LineBorder(Color.BLACK, 1));
+				ico1.setBorder(new LineBorder(Color.GRAY));
+				ico1.setBounds(64, 64, 128, 128);
 				frame.add(ico1);
-				ico1.update();
-				frame.addMouseListener(new MouseAdapter() {
+				ico1.update(PoseOffset.NONE);
+				MouseAdapter adapter = new MouseAdapter() {
+					PoseOffset off = PoseOffset.NONE;
+					int pX, pY;
+					
 					@Override
-					public void mouseClicked(MouseEvent e) {
-						ico1.update();
+					public void mousePressed(MouseEvent e) {
+						pX = e.getXOnScreen();
+						pY = e.getYOnScreen();
+						if ((e.getModifiersEx() & MouseEvent.BUTTON2_DOWN_MASK) != 0) {
+							off = PoseOffset.NONE;
+							ico1.update(off);
+						}
 					}
 					
-				});
+					@Override
+					public void mouseDragged(MouseEvent e) {
+						int x = e.getXOnScreen();
+						int y = e.getYOnScreen();
+						int deltaX = x - pX;
+						int deltaY = y - pY;
+						pX = x;
+						pY = y;
+						if ((e.getModifiersEx() & MouseEvent.BUTTON1_DOWN_MASK) != 0) {
+							off = off.rotate(deltaX * 0.5f, deltaY * 0.5f, 0);
+						} else if ((e.getModifiersEx() & MouseEvent.BUTTON3_DOWN_MASK) != 0) {
+							off = off.translate(deltaX * 0.01F, deltaY * 0.01F, 0);
+						}
+						ico1.update(off);
+					}
+					
+					@Override
+					public void mouseWheelMoved(MouseWheelEvent e) {
+						off = off.scale(e.getWheelRotation() * -0.1f);
+						ico1.update(off);
+					}
+				};
+				frame.addMouseListener(adapter);
+				frame.addMouseMotionListener(adapter);
+				frame.addMouseWheelListener(adapter);
+				frame.setVisible(true);
+				frame.setAlwaysOnTop(true);
 				c.getSource().sendSystemMessage(Component.literal("测试窗口已打开").withStyle(ChatFormatting.GREEN));
 				LOGGER.info("fine");
 			} catch (Exception e) {
