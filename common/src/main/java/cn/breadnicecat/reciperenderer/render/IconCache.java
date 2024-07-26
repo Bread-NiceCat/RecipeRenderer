@@ -4,7 +4,6 @@ import cn.breadnicecat.reciperenderer.utils.PoseOffset;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
@@ -31,32 +30,30 @@ public class IconCache implements Function<PoseOffset, Icon> {
 		return new IconCache(sup);
 	}
 	
-	public static IconCache ofConcurrent(Function<PoseOffset, Icon> sup) {
-		return new Concurrent(sup);
-	}
 	
-	public boolean isPresent(PoseOffset t) {
+	public synchronized boolean isPresent(PoseOffset t) {
 		return cache.containsKey(t);
 	}
 	
 	@Override
-	public Icon apply(PoseOffset t) {
+	public synchronized Icon apply(PoseOffset t) {
 		return last = cache.computeIfAbsent(t, factory);
 	}
 	
-	public void clear() {
+	public synchronized void clear() {
 		cache.clear();
-		clearLast();
+		last = null;
 	}
 	
-	public boolean isLastPresent() {
+	public synchronized boolean isLastPresent() {
 		return last != null;
 	}
 	
-	public @Nullable Icon last() {
+	public synchronized @Nullable Icon last() {
 		return last;
 	}
 	
+	@SuppressWarnings("BusyWait")
 	public @NotNull Icon getLastBlocking() {
 		while (!isLastPresent()) {
 			try {
@@ -66,16 +63,5 @@ public class IconCache implements Function<PoseOffset, Icon> {
 			}
 		}
 		return last;
-	}
-	
-	public void clearLast() {
-		last = null;
-	}
-	
-	static class Concurrent extends IconCache {
-		public Concurrent(Function<PoseOffset, Icon> sup) {
-			super(sup);
-			super.cache = Collections.synchronizedMap(super.cache);
-		}
 	}
 }

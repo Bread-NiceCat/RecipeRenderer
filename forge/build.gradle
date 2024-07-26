@@ -36,6 +36,9 @@ dependencies {
 
     modRuntimeOnly("native:candycraftce:forge-1.0.0") { transitive false }
 
+    // https://mvnrepository.com/artifact/org.jetbrains/intellij-fernflower
+    forgeRuntimeLibrary 'org.jetbrains:intellij-fernflower:1.2.1.16'
+    include 'org.jetbrains:intellij-fernflower:1.2.1.16'
 }
 
 processResources {

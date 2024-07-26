@@ -31,6 +31,10 @@ dependencies {
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
     shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive false }
 
+    // https://mvnrepository.com/artifact/org.jetbrains/intellij-fernflower
+    runtimeOnly 'org.jetbrains:intellij-fernflower:1.2.1.16'
+    include 'org.jetbrains:intellij-fernflower:1.2.1.16'
+
 }
 
 processResources {

@@ -21,19 +21,19 @@ public class IconWrapper {
 	private IconCache icon;
 	
 	public IconWrapper(Function<PoseOffset, Icon> icon) {
-		this.icon = IconCache.ofConcurrent(icon);
+		this.icon = IconCache.of(icon);
 	}
 	
 	public void render(PoseOffset pose) {
-		icon.apply(pose);
-	}
-	
-	public void render() {
 		try {
-			icon.apply(PoseOffset.NONE);
+			icon.apply(pose);
 		} catch (Exception e) {
 			LOGGER.error("渲染错误", e);
 		}
+	}
+	
+	public void render() {
+		icon.apply(PoseOffset.NONE);
 	}
 	
 	public @NotNull Icon getIconBlocking() {

@@ -1,11 +1,11 @@
 package cn.breadnicecat.reciperenderer;
 
 import cn.breadnicecat.reciperenderer.entry.*;
+import cn.breadnicecat.reciperenderer.render.IconWrapper;
 import cn.breadnicecat.reciperenderer.utils.ExportLogger;
+import cn.breadnicecat.reciperenderer.utils.FernFlowerUtils;
 import cn.breadnicecat.reciperenderer.utils.Runnable_WithException;
 import cn.breadnicecat.reciperenderer.utils.Timer;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -36,7 +36,7 @@ import java.util.zip.GZIPOutputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import static cn.breadnicecat.reciperenderer.RecipeRenderer.LOGGER;
+import static cn.breadnicecat.reciperenderer.RecipeRenderer.*;
 import static cn.breadnicecat.reciperenderer.utils.CommonUtils.byId;
 
 /**
@@ -52,8 +52,6 @@ import static cn.breadnicecat.reciperenderer.utils.CommonUtils.byId;
 public class Exporter {
 	public static final AtomicBoolean LOCK = new AtomicBoolean(false);
 	
-	public static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
-	public static final Base64.Encoder BASE64 = Base64.getEncoder();
 	private static final ExecutorService executor = Executors.newFixedThreadPool(1);
 	static Minecraft instance = Minecraft.getInstance();
 	static IntegratedServer server = instance.getSingleplayerServer();
@@ -61,7 +59,6 @@ public class Exporter {
 	final String modid;
 	
 	Timer startTime;
-//	private final ExportFrame frame;
 	
 	/**
 	 * .minecraft/rr_export/modid
@@ -85,13 +82,12 @@ public class Exporter {
 	List<EffectEntry> effects = new LinkedList<>();
 	List<BiomeEntry> biomes = new LinkedList<>();
 	List<JsonObject> recipes = new LinkedList<>();
-	Set<String> recipeTypes = new TreeSet<>();
+	Map<String, Class<?>> recipeTypes = new TreeMap<>();
 	List<List<? extends Localizable>> localizable = List.of(items, entities, enchantments, effects);
 	
 	public Exporter(String modid) {
 		this.modid = modid;
 		this.root = new File(instance.gameDirectory, "rr_export/" + modid);
-//		this.frame = frame;
 		this.outputfile = new File(root, "output.zip");
 		this.logoutfile = new File(root, "logout.log.gz");
 	}
@@ -108,20 +104,24 @@ public class Exporter {
 		this.startTime = new Timer();
 		LOGGER.info("开始初始化");
 		root.mkdirs();
-		try (var logger = new ExportLogger(new GZIPOutputStream(new FileOutputStream(logoutfile)), LOGGER);
+		try (var logger = this.logger = new ExportLogger(new GZIPOutputStream(new FileOutputStream(logoutfile)), LOGGER);
 		     var outputs_z = new ZipOutputStream(new FileOutputStream(outputfile))) {
-			this.logger = logger;
+			outputs_z.setLevel(9);
+			outputs_z.setComment("Exported by " + MOD_NAME + "@v" + modVersion);
 			logger.info("开始导出" + modid);
 			
 			logger.info("开始收集条目");
 			collects();
 			
+			logger.info("开始渲染图片");
+			render();
 			logger.info("开始写入数据");
 			if (tryRun("写入数据时发生致命错误", () -> write(outputs_z), null)) return;
 			logger.info("导出完成,共耗时" + startTime.getString());
 			Util.getPlatform().openUri(root.toURI());
-		} catch (Exception e) {
+		} catch (Throwable e) {
 			reportError("遭遇致命错误", e);
+			throw new RuntimeException(e.getMessage(), e);
 		}
 	}
 	
@@ -139,6 +139,14 @@ public class Exporter {
 		tryRun("导出配方时遇到致命错误", this::collectEnchant, enchantments::clear);
 		
 		collectLang();
+	}
+	
+	public void render() {
+		items.forEach(i -> {
+			scheduleRender(i.id.getPath() + ".ico32", i.ico32);
+			scheduleRender(i.id.getPath() + ".ico128", i.ico128);
+		});
+		entities.forEach(i -> scheduleRender(i.id.getPath() + ".ico128", i.ico));
 	}
 	
 	
@@ -172,13 +180,34 @@ public class Exporter {
 		if (!recipes.isEmpty()) {
 			joiner.add(recipes.size() + "个配方(涉及" + recipeTypes.size() + "种类型)");
 			logger.info("写入配方");
-			writeJson(output, "recipe.jsons", recipes, "#types " + recipeTypes.toString());
+			writeJson(output, "recipe.jsons", recipes, null);
+			logger.info("反编译配方序列化类");
+			for (Map.Entry<String, Class<?>> entry : recipeTypes.entrySet()) {
+				String k = entry.getKey();
+				output.putNextEntry(newZipEntry("recipe_types/" + k + ".java"));
+				try {
+					Class<?> clz = entry.getValue();
+					logger.infoSilent(clz.getName());
+					output.write(FernFlowerUtils.decompile(clz).getBytes());
+				} catch (Exception e) {
+					logger.error("反编译" + k + "失败", e);
+				} finally {
+					output.closeEntry();
+				}
+			}
+			
 		}
 		logger.info(joiner.toString());
 	}
 	
 	
 	//========================================
+	private void scheduleRender(@Nullable String name, IconWrapper ico) {
+		RecipeRenderer.hookRenderer(() -> {
+			if (name != null) logger.infoSilent("render " + name);
+			ico.render();
+		});
+	}
 	
 	private void collectItem() {
 		logger.info("开始收集物品");
@@ -186,10 +215,9 @@ public class Exporter {
 				.filter(i -> i.getKey().location().getNamespace().equals(modid))
 				.forEach(i -> {
 					ResourceLocation location = i.getKey().location();
+					logger.infoSilent(location.toString());
 					Item value = i.getValue();
 					ItemEntry e = new ItemEntry(location, value.getDefaultInstance());
-					RecipeRenderer.hookRenderer(() -> e.ico32.render());
-					RecipeRenderer.hookRenderer(() -> e.ico128.render());
 					items.add(e);
 				});
 	}
@@ -200,11 +228,11 @@ public class Exporter {
 				.filter(i -> i.getKey().location().getNamespace().equals(modid))
 				.forEach(i -> {
 					ResourceLocation location = i.getKey().location();
+					logger.infoSilent(location.toString());
 					Entity entity = i.getValue().create(instance.level);
 					if (entity instanceof Mob) {
 						EntityEntry entry = new EntityEntry(location, entity);
 						entities.add(entry);
-						RecipeRenderer.hookRenderer(() -> entry.ico.render());
 					}
 				});
 		
@@ -234,9 +262,11 @@ public class Exporter {
 		Map<ResourceLocation, Resource> listed = data.listResources("recipes",
 				t -> t.getNamespace().equals(modid) && t.getPath().endsWith(".json"));
 		for (Map.Entry<ResourceLocation, Resource> value : listed.entrySet()) {
+			logger.infoSilent(value.getKey().toString());
 			Resource resource = value.getValue();
 			JsonObject json = GSON.fromJson(resource.openAsReader(), JsonObject.class);
-			recipeTypes.add(json.get("type").getAsString());
+			String type = json.get("type").getAsString();
+			recipeTypes.put(type, BuiltInRegistries.RECIPE_SERIALIZER.get(new ResourceLocation(type)).getClass());
 			recipes.add(json);
 		}
 	}
@@ -247,6 +277,7 @@ public class Exporter {
 				.filter(i -> i.getKey().location().getNamespace().equals(modid))
 				.forEach(i -> {
 					ResourceLocation location = i.getKey().location();
+					logger.infoSilent(location.toString());
 					enchantments.add(new EnchantEntry(location, i.getValue()));
 				});
 	}
@@ -258,6 +289,7 @@ public class Exporter {
 				.toList();
 		list.forEach(i -> {
 			ResourceLocation location = i.getKey().location();
+			logger.infoSilent(location.toString());
 			biomes.add(new BiomeEntry(location, byId(location.getPath())));
 		});
 	}
@@ -269,6 +301,7 @@ public class Exporter {
 				.filter(i -> i.getKey().location().getNamespace().equals(modid))
 				.forEach(i -> {
 					ResourceLocation location = i.getKey().location();
+					logger.infoSilent(location.toString());
 					MobEffect value = i.getValue();
 					EffectEntry e = new EffectEntry(location, value);
 					Optional<Resource> resource = manager.getResource(location.withPrefix("textures/mob_effect/").withSuffix(".png"));
@@ -284,13 +317,14 @@ public class Exporter {
 	}
 	
 	//========================================
+	
 	public <S extends Storable> void write(String storeType, ZipOutputStream out, String fileName, List<S> lists) throws IOException {
 		if (lists == null || lists.isEmpty()) return;
 		
 		BiFunction<String, byte @Nullable [], String> writer = (path, data) -> {
 			try {
 				if (data != null) {
-					out.putNextEntry(new ZipEntry(path));
+					out.putNextEntry(newZipEntry(path));
 					out.write(data);
 					out.closeEntry();
 					return "#" + path;
@@ -321,7 +355,7 @@ public class Exporter {
 	}
 	
 	private void writeJson(ZipOutputStream out, String fileName, List<JsonObject> jsons, @Nullable String head) throws IOException {
-		out.putNextEntry(new ZipEntry(fileName));
+		out.putNextEntry(newZipEntry(fileName));
 		var osw = new OutputStreamWriter(out);
 		if (head != null && !head.isEmpty()) {
 			osw.append(head).append("\n");
@@ -336,9 +370,14 @@ public class Exporter {
 		osw.flush();
 		out.closeEntry();
 	}
-	//========================================
 	
-	private void reportError(String msg, Exception e) {
+	//========================================
+	private ZipEntry newZipEntry(String path) {
+		logger.infoSilent("write to: " + path);
+		return new ZipEntry(path);
+	}
+	
+	private void reportError(String msg, Throwable e) {
 		if (logger != null) {
 			logger.error(msg, e);
 		} else {

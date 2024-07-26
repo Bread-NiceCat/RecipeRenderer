@@ -28,7 +28,7 @@ import java.util.concurrent.Executors;
  **/
 @Environment(EnvType.CLIENT)
 public class ExportLogger extends PrintWriter {
-	private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss");
+	private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss:SSS");
 	private static final ExecutorService executor = Executors.newFixedThreadPool(1);
 	
 	/**
@@ -41,6 +41,10 @@ public class ExportLogger extends PrintWriter {
 		this.logger = logger;
 	}
 	
+	
+	public void infoSilent(String message) {
+		logSilent("INFO", message);
+	}
 	
 	public void info(String message) {
 		logger.info(message);
@@ -60,13 +64,13 @@ public class ExportLogger extends PrintWriter {
 	
 	public void warn(String message, Throwable throwable) {
 		logger.warn(message, throwable);
-		warn(message);
+		warn(message + ": " + throwable.getMessage());
 		exception(throwable);
 	}
 	
 	public void error(String message, Throwable throwable) {
 		logger.error(message, throwable);
-		error(message);
+		error(message + ": " + throwable.getMessage());
 		exception(throwable);
 	}
 	
@@ -77,6 +81,7 @@ public class ExportLogger extends PrintWriter {
 	int greenOrd = 0;
 	
 	public void log(String level, String message) {
+		LocalTime now = LocalTime.now();
 		executor.submit(() -> {
 			try {
 				MutableComponent msg = Component.literal(message).withStyle(switch (level) {
@@ -86,10 +91,17 @@ public class ExportLogger extends PrintWriter {
 					default -> ChatFormatting.WHITE;
 				});
 				Minecraft.getInstance().gui.getChat().addMessage(msg);
+				write("[" + now.format(formatter) + "][" + level + "]" + message + "\n");
 			} catch (Exception ignored) {
 			}
-			write("[" + LocalTime.now().format(formatter) + "][" + level + "]" + message + "\n");
 			flush();
 		});
 	}
+	
+	public void logSilent(String level, String message) {
+		LocalTime now = LocalTime.now();
+		executor.submit(() -> write("[" + now.format(formatter) + "][" + level + "]" + message + "\n"));
+		flush();
+	}
+	
 }

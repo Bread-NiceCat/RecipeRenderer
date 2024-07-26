@@ -1,11 +1,11 @@
 package cn.breadnicecat.reciperenderer.forge;
 
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.fml.Bindings;
+import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 
 import static cn.breadnicecat.reciperenderer.RecipeRenderer.*;
 
@@ -22,8 +22,9 @@ import static cn.breadnicecat.reciperenderer.RecipeRenderer.*;
 public class RecipeRendererImpl {
 	public RecipeRendererImpl() {
 		RecipeRenderer.init(new ForgeRPlatform());
-		FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onRegisterCommands);
-		Bindings.getForgeBus().get().addListener(this::onClientTick);
+		IEventBus eventBus = MinecraftForge.EVENT_BUS;
+		eventBus.addListener(this::onRegisterCommands);
+		eventBus.addListener(this::onClientTick);
 	}
 	
 	public void onRegisterCommands(RegisterCommandsEvent event) {
