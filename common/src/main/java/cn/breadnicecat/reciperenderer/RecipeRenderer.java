@@ -3,7 +3,6 @@ package cn.breadnicecat.reciperenderer;
 import cn.breadnicecat.reciperenderer.gui.ExportFrame;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
 import com.mojang.brigadier.CommandDispatcher;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -14,13 +13,12 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.net.URL;
 import java.net.URLConnection;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.LinkedBlockingDeque;
 
 /**
@@ -73,18 +71,16 @@ public class RecipeRenderer {
 		}
 		Util.backgroundExecutor().submit(() -> {
 			try {
-				URL url = new URL("https://gitee.com/Bread-NiceCat/RecipeRenderer/raw/master/versions.json");
+				URL url = new URL("https://gitee.com/Bread-NiceCat/RecipeRenderer/raw/master/gradle.properties");
 				LOGGER.info("开始获取版本:{}", url);
 				URLConnection connection = url.openConnection();
 				connection.setConnectTimeout(5000);
-				InputStreamReader reader = new InputStreamReader(connection.getInputStream());
-				JsonObject json = GSON.fromJson(reader, JsonObject.class);
-				latestVer = json.get("latest").getAsString();
+				Properties properties = new Properties();
+				properties.load(connection.getInputStream());
+				latestVer = properties.getProperty("mod_version");
 				LOGGER.info("当前版本: {}", modVersion);
 				LOGGER.info("获取到最新版本: {}", latestVer);
-				int[] latest = Arrays.stream(latestVer.split("[.]", 3)).mapToInt(Integer::parseInt).toArray();
-				int[] current = Arrays.stream(modVersion.split("[.]", 3)).mapToInt(Integer::parseInt).toArray();
-				if (latest[0] > current[0] || latest[1] > current[1] || latest[2] > current[2]) {
+				if (!modVersion.equals(latestVer)) {
 					RecipeRenderer.outdated = true;
 				}
 			} catch (IOException e) {
