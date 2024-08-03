@@ -20,4 +20,7 @@ public interface RPlatform {
 	
 	String getVersion(String modid);
 	
+	String getLoaderVersion();
+	
+	String getName();
 }

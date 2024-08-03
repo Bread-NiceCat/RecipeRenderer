@@ -1,7 +1,7 @@
 package cn.breadnicecat.reciperenderer.render;
 
+import cn.breadnicecat.reciperenderer.utils.Function_WithException;
 import cn.breadnicecat.reciperenderer.utils.PoseOffset;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -17,27 +17,28 @@ import java.util.function.Function;
  * 缓存
  * <p>
  **/
-public class IconCache implements Function<PoseOffset, Icon> {
-	private Map<PoseOffset, Icon> cache = new HashMap<>();
-	private Icon last;
-	private final Function<PoseOffset, Icon> factory;
+public class IconCache implements Function<PoseOffset, IIcon> {
+	private Map<PoseOffset, IIcon> cache = new HashMap<>();
+	private IIcon last;
+	private final Function_WithException<PoseOffset, IIcon> factory;
+	private boolean valid = true;
 	
-	private IconCache(Function<PoseOffset, Icon> factory) {
-		this.factory = factory;
+	private IconCache(Function<PoseOffset, IIcon> factory) {
+		this.factory = factory::apply;
 	}
 	
-	public static IconCache of(Function<PoseOffset, Icon> sup) {
+	public static IconCache of(Function<PoseOffset, IIcon> sup) {
 		return new IconCache(sup);
 	}
 	
 	
 	public synchronized boolean isPresent(PoseOffset t) {
-		return cache.containsKey(t);
+		return valid && cache.containsKey(t);
 	}
 	
 	@Override
-	public synchronized Icon apply(PoseOffset t) {
-		return last = cache.computeIfAbsent(t, factory);
+	public synchronized IIcon apply(PoseOffset t) {
+		return valid ? last = cache.computeIfAbsent(t, (of) -> factory.apply(of, (e) -> invalidate())) : null;
 	}
 	
 	public synchronized void clear() {
@@ -46,22 +47,23 @@ public class IconCache implements Function<PoseOffset, Icon> {
 	}
 	
 	public synchronized boolean isLastPresent() {
-		return last != null;
+		return valid && last != null;
 	}
 	
-	public synchronized @Nullable Icon last() {
-		return last;
+	public synchronized @Nullable IIcon last() {
+		return valid ? last : null;
 	}
 	
-	@SuppressWarnings("BusyWait")
-	public @NotNull Icon getLastBlocking() {
-		while (!isLastPresent()) {
-			try {
-				Thread.sleep(50);
-			} catch (InterruptedException e) {
-				throw new RuntimeException(e);
-			}
+	public synchronized void invalidate() {
+		valid = false;
+		clear();
+	}
+	
+	public @Nullable IIcon getLastBlocking() {
+		while (valid && !isLastPresent()) {
+			Thread.yield();
 		}
-		return last;
+		return last();
 	}
+	
 }

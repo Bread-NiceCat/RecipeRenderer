@@ -6,6 +6,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.Logger;
 
 import java.io.OutputStream;
@@ -16,6 +17,8 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import static org.apache.logging.log4j.Level.*;
 
 /**
  * Created in 2024/7/25 上午12:25
@@ -41,24 +44,27 @@ public class ExportLogger extends PrintWriter {
 		this.logger = logger;
 	}
 	
+	public void warnSilent(String message) {
+		logSilent(WARN, message);
+	}
 	
 	public void infoSilent(String message) {
-		logSilent("INFO", message);
+		logSilent(INFO, message);
 	}
 	
 	public void info(String message) {
 		logger.info(message);
-		log("INFO", message);
+		log(INFO, message);
 	}
 	
 	public void warn(String message) {
 		logger.warn(message);
-		log("WARN", message);
+		log(WARN, message);
 	}
 	
 	public void error(String message) {
 		logger.error(message);
-		log("ERROR", message);
+		log(ERROR, message);
 		
 	}
 	
@@ -80,28 +86,38 @@ public class ExportLogger extends PrintWriter {
 	
 	int greenOrd = 0;
 	
-	public void log(String level, String message) {
+	public void log(Level level, String message) {
 		LocalTime now = LocalTime.now();
 		executor.submit(() -> {
 			try {
-				MutableComponent msg = Component.literal(message).withStyle(switch (level) {
-					case "INFO" -> greenOrd++ % 2 == 0 ? ChatFormatting.DARK_GREEN : ChatFormatting.DARK_AQUA;
-					case "WARN" -> ChatFormatting.YELLOW;
-					case "ERROR" -> ChatFormatting.RED;
+				MutableComponent msg = Component.literal(message).withStyle(switch (level.getStandardLevel()) {
+					case INFO -> greenOrd++ % 2 == 0 ? ChatFormatting.DARK_GREEN : ChatFormatting.DARK_AQUA;
+					case WARN -> ChatFormatting.YELLOW;
+					case ERROR -> ChatFormatting.RED;
 					default -> ChatFormatting.WHITE;
 				});
 				Minecraft.getInstance().gui.getChat().addMessage(msg);
 				write("[" + now.format(formatter) + "][" + level + "]" + message + "\n");
 			} catch (Exception ignored) {
 			}
-			flush();
 		});
 	}
 	
-	public void logSilent(String level, String message) {
+	public void logSilent(Level level, String message) {
 		LocalTime now = LocalTime.now();
-		executor.submit(() -> write("[" + now.format(formatter) + "][" + level + "]" + message + "\n"));
-		flush();
+		executor.submit(() -> {
+			logger.log(level, message);
+			write("[" + now.format(formatter) + "][" + level + "]" + message + "\n");
+		});
 	}
 	
+	@Override
+	public void close() {
+		executor.submit(super::close);
+	}
+	
+	@Override
+	public void flush() {
+		executor.submit(super::flush);
+	}
 }

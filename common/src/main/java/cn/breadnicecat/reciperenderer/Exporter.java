@@ -2,27 +2,30 @@ package cn.breadnicecat.reciperenderer;
 
 import cn.breadnicecat.reciperenderer.entry.*;
 import cn.breadnicecat.reciperenderer.render.IconWrapper;
-import cn.breadnicecat.reciperenderer.utils.ExportLogger;
-import cn.breadnicecat.reciperenderer.utils.FernFlowerUtils;
-import cn.breadnicecat.reciperenderer.utils.Runnable_WithException;
 import cn.breadnicecat.reciperenderer.utils.Timer;
+import cn.breadnicecat.reciperenderer.utils.*;
 import com.google.gson.JsonObject;
+import com.mojang.datafixers.util.Pair;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.Util;
+import net.minecraft.ChatFormatting;
+import net.minecraft.DetectedVersion;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.language.ClientLanguage;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.locale.Language;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.item.Item;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.CreativeModeTabs;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.*;
@@ -50,20 +53,19 @@ import static cn.breadnicecat.reciperenderer.utils.CommonUtils.byId;
  **/
 @Environment(EnvType.CLIENT)
 public class Exporter {
-	public static final AtomicBoolean LOCK = new AtomicBoolean(false);
+	public final AtomicBoolean validator = new AtomicBoolean(true);
 	
 	private static final ExecutorService executor = Executors.newFixedThreadPool(1);
 	static Minecraft instance = Minecraft.getInstance();
 	static IntegratedServer server = instance.getSingleplayerServer();
-	
 	final String modid;
 	
 	Timer startTime;
-	
+	public static final File ROOT_DIR = new File(instance.gameDirectory, "rr_export/");
 	/**
 	 * .minecraft/rr_export/modid
 	 */
-	final File root;
+	final File modRoot;
 	/**
 	 * $root/output.zip
 	 */
@@ -81,15 +83,17 @@ public class Exporter {
 	List<EnchantEntry> enchantments = new LinkedList<>();
 	List<EffectEntry> effects = new LinkedList<>();
 	List<BiomeEntry> biomes = new LinkedList<>();
+	List<DimensionEntry> dimensions = new LinkedList<>();
 	List<JsonObject> recipes = new LinkedList<>();
 	Map<String, Class<?>> recipeTypes = new TreeMap<>();
-	List<List<? extends Localizable>> localizable = List.of(items, entities, enchantments, effects);
+	List<List<? extends LocalizableV2>> localizable = List.of(items, entities, enchantments, effects);
 	
 	public Exporter(String modid) {
 		this.modid = modid;
-		this.root = new File(instance.gameDirectory, "rr_export/" + modid);
-		this.outputfile = new File(root, "output.zip");
-		this.logoutfile = new File(root, "logout.log.gz");
+		
+		this.modRoot = new File(ROOT_DIR, modid);
+		this.outputfile = new File(modRoot, "output.zip");
+		this.logoutfile = new File(modRoot, "logout.log.gz");
 	}
 	
 	public void runAsync() {
@@ -103,42 +107,49 @@ public class Exporter {
 		}
 		this.startTime = new Timer();
 		LOGGER.info("开始初始化");
-		root.mkdirs();
+		modRoot.mkdirs();
 		try (var logger = this.logger = new ExportLogger(new GZIPOutputStream(new FileOutputStream(logoutfile)), LOGGER);
 		     var outputs_z = new ZipOutputStream(new FileOutputStream(outputfile))) {
 			outputs_z.setLevel(9);
-			outputs_z.setComment("Exported by " + MOD_NAME + "@v" + modVersion);
+			outputs_z.setComment("Exported by " + MOD_NAME + " v" + modVersion
+					+ ", \nTargetMod " + modid + "@" + getVersion(modid)
+					+ ", \nEnvironment Minecraft@" + DetectedVersion.BUILT_IN.getName() + "+" + platform.getName() + "@" + platform.getLoaderVersion());
 			logger.info("开始导出" + modid);
 			
 			logger.info("开始收集条目");
 			collects();
 			
-			logger.info("开始渲染图片");
+			logger.info("向客户端发送渲染任务");
 			render();
+			
 			logger.info("开始写入数据");
 			if (tryRun("写入数据时发生致命错误", () -> write(outputs_z), null)) return;
+			
 			logger.info("导出完成,共耗时" + startTime.getString());
-			Util.getPlatform().openUri(root.toURI());
+			open(modRoot);
 		} catch (Throwable e) {
+			validator.set(false);
 			reportError("遭遇致命错误", e);
 			throw new RuntimeException(e.getMessage(), e);
 		}
+		validator.set(false);
 	}
 	
 	//========================================
 	
 	public void collects() {
-		tryRun("导出物品时遇到致命错误", this::collectItem, items::clear);
-		tryRun("导出实体时遇到致命错误", this::collectEntity, entities::clear);
-		tryRun("导出配方时遇到致命错误", this::collectRecipe, () -> {
+		tryRun("导出物品时遇到致命错误", this::_collectItem, items::clear);
+		tryRun("导出实体时遇到致命错误", this::_collectEntity, entities::clear);
+		tryRun("导出配方时遇到致命错误", this::_collectRecipe, () -> {
 			recipes.clear();
 			recipeTypes.clear();
 		});
-		tryRun("导出物品时遇到致命错误", this::collectBiome, biomes::clear);
-		tryRun("导出实体时遇到致命错误", this::collectEffect, effects::clear);
-		tryRun("导出配方时遇到致命错误", this::collectEnchant, enchantments::clear);
+		tryRun("导出时药水效果时遇到致命错误", this::_collectEffect, effects::clear);
+		tryRun("导出附魔时遇到致命错误", this::_collectEnchant, enchantments::clear);
+		tryRun("导出生物群系时遇到致命错误", this::_collectBiome, biomes::clear);
+		tryRun("导出维度时遇到致命错误", this::_collectDim, dimensions::clear);
 		
-		collectLang();
+		_collectLang();
 	}
 	
 	public void render() {
@@ -146,7 +157,7 @@ public class Exporter {
 			scheduleRender(i.id.getPath() + "_ico32", i.ico32);
 			scheduleRender(i.id.getPath() + "_ico128", i.ico128);
 		});
-		entities.forEach(i -> scheduleRender(i.id.getPath() + ".ico128", i.ico));
+		entities.forEach(i -> scheduleRender(i.id.getPath() + "_ico128", i.ico128));
 	}
 	
 	
@@ -158,7 +169,7 @@ public class Exporter {
 			write("item", output, "item.jsons", items);
 		}
 		if (!entities.isEmpty()) {
-			joiner.add(effects.size() + "个实体");
+			joiner.add(entities.size() + "个实体");
 			logger.info("写入实体");
 			write("entity", output, "entity.jsons", entities);
 		}
@@ -171,6 +182,11 @@ public class Exporter {
 			joiner.add(enchantments.size() + "个附魔");
 			logger.info("写入附魔");
 			write("enchantment", output, "enchantment.jsons", enchantments);
+		}
+		if (!dimensions.isEmpty()) {
+			joiner.add(dimensions.size() + "个维度");
+			logger.info("写入维度");
+			write("dimension", output, "dimension.jsons", dimensions);
 		}
 		if (!biomes.isEmpty()) {
 			joiner.add(biomes.size() + "个群系");
@@ -199,7 +215,7 @@ public class Exporter {
 					}
 					output.write(bytes);
 				} catch (Exception e) {
-					logger.error("反编译" + k + "失败", e);
+					reportError("反编译" + k + "失败", e);
 				} finally {
 					output.closeEntry();
 				}
@@ -213,25 +229,54 @@ public class Exporter {
 	//========================================
 	private void scheduleRender(@Nullable String name, IconWrapper ico) {
 		RecipeRenderer.hookRenderer(() -> {
-			if (name != null) logger.infoSilent("render " + name);
-			ico.render();
+			if (validator.get()) {
+				if (name != null) logger.infoSilent("开始渲染：" + name + ",wrapId=" + ico.wrapId);
+				try {
+					ico.render();
+				} catch (Exception e) {
+					reportError(name + "渲染失败,wrapId=" + ico.wrapId, e);
+				}
+			} else {
+				logger.warnSilent("渲染失败:无效的会话,wrapId=" + ico.wrapId);
+			}
 		});
 	}
 	
-	private void collectItem() {
+	private void _collectItem() {
 		logger.info("开始收集物品");
-		BuiltInRegistries.ITEM.entrySet().stream()
-				.filter(i -> i.getKey().location().getNamespace().equals(modid))
-				.forEach(i -> {
-					ResourceLocation location = i.getKey().location();
-					logger.infoSilent(location.toString());
-					Item value = i.getValue();
-					ItemEntry e = new ItemEntry(location, value.getDefaultInstance());
-					items.add(e);
-				});
+		CreativeModeTabs.tryRebuildTabContents(instance.level.enabledFeatures(), true, instance.level.registryAccess());
+		HashMap<ItemState, ItemEntry> holders = new HashMap<>();
+		CreativeModeTabs.allTabs().stream()
+				.map(t -> Pair.of(BuiltInRegistries.CREATIVE_MODE_TAB.getResourceKey(t).orElse(null), t))
+				.filter(key -> {
+					ResourceKey<CreativeModeTab> id = key.getFirst();
+					return id != null && id != CreativeModeTabs.SEARCH && id != CreativeModeTabs.INVENTORY;
+				})
+				.forEach(tabs -> tabs.getSecond().getDisplayItems().stream()
+						.map(i -> Pair.of(BuiltInRegistries.ITEM.getKey(i.getItem()), new ItemState(i)))
+						.filter(p -> p.getFirst().getNamespace().equals(modid))
+						.forEach(i -> {
+							ResourceLocation location = i.getFirst();
+							holders.computeIfAbsent(i.getSecond(), (state) -> {
+								logger.infoSilent(location.toString());
+								ItemEntry e = new ItemEntry(location, state);
+								items.add(e);
+								return e;
+							}).tabs.add(tabs.getSecond());
+						}));
+		//从注册表拿东西可能会拿不到带nbt的东西
+//		BuiltInRegistries.ITEM.entrySet().stream()
+//				.filter(i -> i.getKey().location().getNamespace().equals(modid))
+//				.forEach(i -> {
+//					ResourceLocation location = i.getKey().location();
+//					logger.infoSilent(location.toString());
+//					Item value = i.getValue();
+//					ItemEntry e = new ItemEntry(location, value.getDefaultInstance());
+//					items.add(e);
+//				});
 	}
 	
-	private void collectEntity() {
+	private void _collectEntity() {
 		logger.info("开始获取实体");
 		BuiltInRegistries.ENTITY_TYPE.entrySet().stream()
 				.filter(i -> i.getKey().location().getNamespace().equals(modid))
@@ -239,33 +284,33 @@ public class Exporter {
 					ResourceLocation location = i.getKey().location();
 					logger.infoSilent(location.toString());
 					Entity entity = i.getValue().create(instance.level);
-					if (entity instanceof Mob) {
-						EntityEntry entry = new EntityEntry(location, entity);
+					if (entity instanceof Mob mob) {
+						EntityEntry entry = new EntityEntry(location, mob);
 						entities.add(entry);
 					}
 				});
 		
 	}
 	
-	private void collectLang() {
+	private void _collectLang() {
 		logger.info("开始解析语言");
 		ClientLanguage zh = ClientLanguage.loadFrom(instance.getResourceManager(), List.of("en_us", "zh_cn"), false);
 		ClientLanguage en = ClientLanguage.loadFrom(instance.getResourceManager(), List.of("en_us"), false);
 		Language rawl = Language.getInstance();
-		for (List<? extends Localizable> s : localizable) {
+		for (List<? extends LocalizableV2> s : localizable) {
 			Language.inject(en);
-			for (Localizable localizable : s) {
-				localizable.setEn(localizable.getName().getString());
+			for (LocalizableV2 localizable : s) {
+				localizable.localizeEn();
 			}
 			Language.inject(zh);
-			for (Localizable localizable : s) {
-				localizable.setZh(localizable.getName().getString());
+			for (LocalizableV2 localizable : s) {
+				localizable.localizeZh();
 			}
 		}
 		Language.inject(rawl);
 	}
 	
-	private void collectRecipe() throws IOException {
+	private void _collectRecipe() throws IOException {
 		logger.info("开始获取配方");
 		ResourceManager data = Objects.requireNonNull(instance.getSingleplayerServer()).getResourceManager();
 		Map<ResourceLocation, Resource> listed = data.listResources("recipes",
@@ -280,7 +325,7 @@ public class Exporter {
 		}
 	}
 	
-	private void collectEnchant() {
+	private void _collectEnchant() {
 		logger.info("开始获取附魔");
 		BuiltInRegistries.ENCHANTMENT.entrySet().stream()
 				.filter(i -> i.getKey().location().getNamespace().equals(modid))
@@ -291,7 +336,18 @@ public class Exporter {
 				});
 	}
 	
-	private void collectBiome() {
+	private void _collectDim() {
+		logger.info("开始获取维度");
+		server.registryAccess().registry(Registries.DIMENSION_TYPE).orElseThrow().entrySet().stream()
+				.filter(i -> i.getKey().location().getNamespace().equals(modid))
+				.forEach(i -> {
+					ResourceLocation location = i.getKey().location();
+					logger.infoSilent(location.toString());
+					dimensions.add(new DimensionEntry(location, byId(location.getPath()), i.getValue()));
+				});
+	}
+	
+	private void _collectBiome() {
 		logger.info("开始获取生物群系");
 		var list = server.registryAccess().registry(Registries.BIOME).orElseThrow().entrySet().stream()
 				.filter(i -> i.getKey().location().getNamespace().equals(modid))
@@ -303,7 +359,7 @@ public class Exporter {
 		});
 	}
 	
-	private void collectEffect() {
+	private void _collectEffect() {
 		logger.info("开始获取药水效果");
 		ResourceManager manager = instance.getResourceManager();
 		BuiltInRegistries.MOB_EFFECT.entrySet().stream()
@@ -326,10 +382,10 @@ public class Exporter {
 	}
 	
 	//========================================
+	final ExistHelper existHelper = new ExistHelper();
 	
 	public <S extends Storable> void write(String storeType, ZipOutputStream out, String fileName, List<S> lists) throws IOException {
 		if (lists == null || lists.isEmpty()) return;
-		
 		BiFunction<String, byte @Nullable [], String> writer = (path, data) -> {
 			try {
 				if (data != null) {
@@ -345,12 +401,11 @@ public class Exporter {
 		};
 		
 		LinkedList<JsonObject> jsons = new LinkedList<>();
-		
 		int version = -1;
 		for (int i = 0; i < lists.size(); i++) {
 			S storable = lists.get(i);
 			JsonObject object = new JsonObject();
-			int ver = storable.store(writer, object);
+			int ver = storable.store(existHelper, writer, object, logger);
 			if (ver < 1) throw new RuntimeException("错误的版本号:" + ver);
 			if (i == 0) {
 				version = ver;
@@ -382,7 +437,7 @@ public class Exporter {
 	
 	//========================================
 	private ZipEntry newZipEntry(String path) {
-		logger.infoSilent("write to: " + path);
+		logger.infoSilent("准备写入: " + path);
 		return new ZipEntry(path);
 	}
 	
@@ -391,6 +446,7 @@ public class Exporter {
 			logger.error(msg, e);
 		} else {
 			LOGGER.error(msg, e);
+			instance.gui.getChat().addMessage(Component.literal(msg + "," + e.getMessage()).withStyle(ChatFormatting.RED));
 		}
 	}
 	
@@ -400,7 +456,7 @@ public class Exporter {
 	 *
 	 * @return 是否失败
 	 */
-	private boolean tryRun(String msg, Runnable_WithException run, @Nullable Runnable fail) {
+	private boolean tryRun(String msg, Runnable_WithException<Exception> run, @Nullable Runnable fail) {
 		try {
 			run.run();
 		} catch (Exception e) {

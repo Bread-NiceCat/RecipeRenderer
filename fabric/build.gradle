@@ -6,11 +6,13 @@ architectury {
     platformSetupLoomIde()
     fabric()
 }
+
+archivesBaseName += "-fabric"
+
 loom {
     accessWidenerPath = project(":common").loom.accessWidenerPath
     runs {
         client {
-            vmArg "-Dmixin.debug.export=true"
             vmArg "-XX:+AllowEnhancedClassRedefinition"
         }
     }

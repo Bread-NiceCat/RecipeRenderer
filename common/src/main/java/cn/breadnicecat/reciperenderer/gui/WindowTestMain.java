@@ -15,6 +15,7 @@ import java.awt.event.MouseEvent;
  *
  * <p>
  **/
+@Deprecated(forRemoval = true)
 public class WindowTestMain {
 	public static void main(String[] args) {
 		ExportFrame exportFrame = new ExportFrame();

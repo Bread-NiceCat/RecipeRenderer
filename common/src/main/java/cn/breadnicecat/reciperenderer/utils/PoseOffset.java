@@ -12,10 +12,10 @@ import com.mojang.math.Axis;
  *
  * <p>
  **/
-public record PoseOffset(float x, float y, float z,
+public record PoseOffset(int x, int y, int z,
                          float xRot, float yRot, float zRot,
-                         float xScale, float yScale, float zScale) {
-	public static final PoseOffset NONE = new PoseOffset(0f, 0f, 0f, 0f, 0f, 0f, 1f, 1f, 1f);
+                         float scale) {
+	public static final PoseOffset NONE = new PoseOffset(0, 0, 0, 0f, 0f, 0f, 1f);
 	
 	public void apply(PoseStack ps) {
 		if (this == NONE) return;
@@ -23,10 +23,10 @@ public record PoseOffset(float x, float y, float z,
 		if (xRot != 0f) ps.mulPose(Axis.XP.rotationDegrees(xRot));
 		if (yRot != 0f) ps.mulPose(Axis.YP.rotationDegrees(yRot));
 		if (zRot != 0f) ps.mulPose(Axis.ZP.rotationDegrees(zRot));
-		ps.scale(xScale, yScale, zScale);
+		ps.scale(scale, scale, scale);
 	}
 	
-	public PoseOffset translate(float deltaX, float deltaY, float deltaZ) {
+	public PoseOffset translate(int deltaX, int deltaY, int deltaZ) {
 		if (deltaX == deltaY && deltaY == deltaZ && deltaZ == 0f) {
 			return this;
 		} else {
@@ -34,8 +34,8 @@ public record PoseOffset(float x, float y, float z,
 		}
 	}
 	
-	public PoseOffset setTranslate(float x, float y, float z) {
-		return new PoseOffset(x, y, z, xRot, yRot, zRot, xScale, yScale, zScale);
+	public PoseOffset setTranslate(int x, int y, int z) {
+		return new PoseOffset(x, y, z, xRot, yRot, zRot, scale);
 	}
 	
 	/**
@@ -53,22 +53,18 @@ public record PoseOffset(float x, float y, float z,
 	 * 单位deg
 	 */
 	public PoseOffset setRotate(float xRot, float yRot, float zRot) {
-		return new PoseOffset(x, y, z, xRot, yRot, zRot, xScale, yScale, zScale);
+		return new PoseOffset(x, y, z, xRot, yRot, zRot, scale);
 	}
 	
 	public PoseOffset scale(float deltaScale) {
-		return scale(deltaScale, deltaScale, deltaScale);
-	}
-	
-	public PoseOffset scale(float deltaXScale, float deltaYScale, float deltaZScale) {
-		if (deltaXScale == deltaYScale && deltaYScale == deltaZScale && deltaZScale == 0f) {
+		if (deltaScale == 0f) {
 			return this;
 		} else {
-			return setScale(xScale + deltaXScale, yScale + deltaYScale, zScale + deltaZScale);
+			return setScale(scale + deltaScale);
 		}
 	}
 	
-	public PoseOffset setScale(float xScale, float yScale, float zScale) {
-		return new PoseOffset(x, y, z, xRot, yRot, zRot, xScale, yScale, zScale);
+	public PoseOffset setScale(float scale) {
+		return new PoseOffset(x, y, z, xRot, yRot, zRot, scale);
 	}
 }

@@ -1,5 +1,7 @@
 package cn.breadnicecat.reciperenderer.entry;
 
+import cn.breadnicecat.reciperenderer.utils.ExistHelper;
+import cn.breadnicecat.reciperenderer.utils.ExportLogger;
 import com.google.gson.JsonObject;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -45,16 +47,12 @@ public class EffectEntry implements Storable, Localizable {
 		this.en = en;
 	}
 	
-	public void setIco(byte[] ico) {
-		this.ico = ico;
-	}
-	
 	@Override
-	public int store(BiFunction<String, byte @Nullable [], String> writer, JsonObject object) {
+	public int store(ExistHelper existHelper, BiFunction<String, byte @Nullable [], String> writer, JsonObject object, ExportLogger logger) {
 		object.addProperty("id", id.toString());
 		object.addProperty("en", en);
 		object.addProperty("zh", zh);
-		object.addProperty("ico", writer.apply("attachment/effect/" + id.getPath() + ".png", ico));
+		object.addProperty("ico", writer.apply(existHelper.getModified("attachment/effect/" + id.getPath() + ".png"), ico));
 		return 1;
 	}
 	

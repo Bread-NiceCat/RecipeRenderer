@@ -11,7 +11,17 @@ import net.minecraft.network.chat.Component;
  *
  * <p>
  **/
-public interface Localizable {
+public interface Localizable extends LocalizableV2 {
+	@Override
+	default void localizeZh() {
+		setZh(getName().getString());
+	}
+	
+	@Override
+	default void localizeEn() {
+		setEn(getName().getString());
+	}
+	
 	Component getName();
 	
 	void setZh(String zh);

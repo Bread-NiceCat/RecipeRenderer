@@ -10,7 +10,7 @@ package cn.breadnicecat.reciperenderer.utils;
  * <p>
  **/
 @FunctionalInterface
-public interface Runnable_WithException {
+public interface Runnable_WithException<E extends Throwable> {
 	
-	void run() throws Exception;
+	void run() throws E;
 }

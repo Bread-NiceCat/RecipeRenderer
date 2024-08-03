@@ -1,5 +1,6 @@
 package cn.breadnicecat.reciperenderer.entry;
 
+import cn.breadnicecat.reciperenderer.utils.ExportLogger;
 import com.google.gson.JsonObject;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -48,7 +49,7 @@ public class EnchantEntry implements Localizable, Storable {
 	}
 	
 	@Override
-	public int store(JsonObject object) {
+	public int store(JsonObject object, ExportLogger logger) {
 		object.addProperty("id", id.toString());
 		object.addProperty("en", en);
 		object.addProperty("zh", zh);

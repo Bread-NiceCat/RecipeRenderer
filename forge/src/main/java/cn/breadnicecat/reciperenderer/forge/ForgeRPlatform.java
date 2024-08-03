@@ -4,6 +4,7 @@ import cn.breadnicecat.reciperenderer.RPlatform;
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.forgespi.language.IModInfo;
+import net.minecraftforge.versions.forge.ForgeVersion;
 
 import java.util.stream.Stream;
 
@@ -30,6 +31,16 @@ public class ForgeRPlatform implements RPlatform {
 	@Override
 	public String getVersion(String modid) {
 		return ModList.get().getModFileById(modid).versionString();
+	}
+	
+	@Override
+	public String getLoaderVersion() {
+		return ForgeVersion.getVersion();
+	}
+	
+	@Override
+	public String getName() {
+		return "Forge";
 	}
 	
 	

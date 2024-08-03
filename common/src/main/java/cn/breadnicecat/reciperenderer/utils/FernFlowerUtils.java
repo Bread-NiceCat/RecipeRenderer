@@ -95,6 +95,7 @@ public class FernFlowerUtils {
 		return decompiled[0];
 	}
 	
+	@Deprecated(forRemoval = true)
 	public static void main(String[] args) throws IOException {
 		System.out.println(decompile(FernFlowerUtils.class));
 	}

@@ -21,7 +21,7 @@ public class ExportFrame extends JFrame {
 	private boolean busy;
 	
 	public ExportFrame() {
-		setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+		setDefaultCloseOperation(EXIT_ON_CLOSE);
 		setResizable(false);
 		setScreen(defaultScreen);
 		setTitle(RecipeRenderer.MOD_NAME);

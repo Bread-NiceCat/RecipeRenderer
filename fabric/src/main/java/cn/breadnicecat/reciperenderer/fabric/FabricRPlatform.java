@@ -3,6 +3,7 @@ package cn.breadnicecat.reciperenderer.fabric;
 import cn.breadnicecat.reciperenderer.RPlatform;
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
 import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.impl.FabricLoaderImpl;
 
 import java.util.stream.Stream;
 
@@ -29,6 +30,16 @@ public class FabricRPlatform implements RPlatform {
 	@Override
 	public String getVersion(String modid) {
 		return FabricLoader.getInstance().getModContainer(modid).orElseThrow().getMetadata().getVersion().getFriendlyString();
+	}
+	
+	@Override
+	public String getLoaderVersion() {
+		return getVersion(FabricLoaderImpl.MOD_ID);
+	}
+	
+	@Override
+	public String getName() {
+		return "Fabric";
 	}
 	
 	@Override

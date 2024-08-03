@@ -1,14 +1,20 @@
 package cn.breadnicecat.reciperenderer.entry;
 
-import cn.breadnicecat.reciperenderer.render.Icon;
 import cn.breadnicecat.reciperenderer.render.IconWrapper;
+import cn.breadnicecat.reciperenderer.render.ItemIcon;
+import cn.breadnicecat.reciperenderer.utils.ExistHelper;
+import cn.breadnicecat.reciperenderer.utils.ExportLogger;
+import cn.breadnicecat.reciperenderer.utils.ItemState;
 import com.google.gson.JsonObject;
-import net.minecraft.network.chat.Component;
+import com.mojang.serialization.JsonOps;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.function.BiFunction;
 
 /**
@@ -20,7 +26,7 @@ import java.util.function.BiFunction;
  *
  * <p>
  **/
-public class ItemEntry implements Localizable, Storable {
+public class ItemEntry implements LocalizableV2, Storable {
 	public final ItemStack stack;
 	
 	public int stackSize;
@@ -29,46 +35,47 @@ public class ItemEntry implements Localizable, Storable {
 	public String[] tags;
 	public String en;
 	public String zh;
-	
+	public CompoundTag nbt;
 	public IconWrapper ico32;
 	public IconWrapper ico128;
 	
-	public ItemEntry(ResourceLocation id, ItemStack stack) {
-		this.stack = stack;
+	public LinkedList<CreativeModeTab> tabs = new LinkedList<>();
+	public LinkedList<String> tabNames = new LinkedList<>();
+	
+	public ItemEntry(ResourceLocation id, ItemState state) {
+		this.stack = state.stack;
 		this.id = id;
-		ico32 = new IconWrapper((pose) -> new Icon(pose, 32, stack));
-		ico128 = new IconWrapper((pose) -> new Icon(pose, 128, stack));
+		ico32 = new IconWrapper((pose) -> new ItemIcon(pose, 32, stack));
+		ico128 = new IconWrapper((pose) -> new ItemIcon(pose, 128, stack));
 		stackSize = stack.getMaxStackSize();
 		durability = stack.getMaxDamage();
 		tags = stack.getTags().map(i -> i.location().toString()).toArray(String[]::new);
-	}
-	
-	
-	@Override
-	public Component getName() {
-		return stack.getHoverName();
+		nbt = stack.hasTag() ? state.stack.getTag() : new CompoundTag();
 	}
 	
 	@Override
-	public void setZh(String zh) {
-		this.zh = zh;
+	public void localizeZh() {
+		zh = stack.getHoverName().getString();
+		tabs.forEach(i -> tabNames.add(i.getDisplayName().getString()));
 	}
 	
 	@Override
-	public void setEn(String en) {
-		this.en = en;
+	public void localizeEn() {
+		en = stack.getHoverName().getString();
 	}
 	
 	@Override
-	public int store(BiFunction<String, byte @Nullable [], String> writer, JsonObject object) {
+	public int store(ExistHelper existHelper, BiFunction<String, byte @Nullable [], String> writer, JsonObject object, ExportLogger logger) {
 		object.addProperty("id", id.toString());
 		object.addProperty("en", en);
 		object.addProperty("zh", zh);
+		object.addProperty("tabs", tabNames.toString());
 		object.addProperty("tags", Arrays.toString(tags));
 		object.addProperty("stackSize", stackSize);
 		object.addProperty("durability", durability);
-		object.addProperty("ico32", writer.apply("attachment/ico32/" + id.getPath() + ".png", ico32.getBytesBlocking()));
-		object.addProperty("ico128", writer.apply("attachment/ico128/" + id.getPath() + ".png", ico128.getBytesBlocking()));
-		return 1;
+		object.addProperty("nbt", CompoundTag.CODEC.encodeStart(JsonOps.INSTANCE, nbt).get().orThrow().toString());
+		object.addProperty("ico32", writer.apply(existHelper.getModified("attachment/ico32/" + id.getPath() + ".png"), ico32.getBytesBlocking(logger)));
+		object.addProperty("ico128", writer.apply(existHelper.getModified("attachment/ico128/" + id.getPath() + ".png"), ico128.getBytesBlocking(logger)));
+		return 2;
 	}
 }

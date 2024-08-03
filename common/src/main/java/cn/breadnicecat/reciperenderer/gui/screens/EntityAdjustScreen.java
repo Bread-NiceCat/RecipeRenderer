@@ -38,13 +38,13 @@ public class EntityAdjustScreen extends Screen {
 	
 	public EntityAdjustScreen(List<EntityEntry> entity) {
 		EntityEntry entityEntry = entity.get(0);
-		RecipeRenderer.hookRenderer(() -> entityEntry.ico.render(PoseOffset.NONE));
+		RecipeRenderer.hookRenderer(() -> entityEntry.ico128.render(PoseOffset.NONE));
 		JLabel coord = new JLabel(new ImageIcon(coord256)) {
 			@Override
 			public void print(Graphics g) {
 				super.print(g);
 				try {
-					ImageIO.read(new ByteArrayInputStream(entityEntry.ico.getBytesBlocking()));
+					ImageIO.read(new ByteArrayInputStream(entityEntry.ico128.getBytesBlocking()));
 				} catch (IOException e) {
 					throw new RuntimeException(e);
 				}

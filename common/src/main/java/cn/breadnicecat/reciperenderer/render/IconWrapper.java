@@ -1,12 +1,12 @@
 package cn.breadnicecat.reciperenderer.render;
 
+import cn.breadnicecat.reciperenderer.utils.ExportLogger;
 import cn.breadnicecat.reciperenderer.utils.PoseOffset;
-import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-
-import static cn.breadnicecat.reciperenderer.RecipeRenderer.LOGGER;
 
 /**
  * Created in 2024/7/25 上午2:10
@@ -18,37 +18,43 @@ import static cn.breadnicecat.reciperenderer.RecipeRenderer.LOGGER;
  * <p>
  **/
 public class IconWrapper {
+	private static final AtomicInteger ids = new AtomicInteger();
+	public final String wrapId = "0x" + Integer.toString(ids.incrementAndGet(), 16);
 	private IconCache icon;
 	private boolean cache;
 	
-	public IconWrapper(Function<PoseOffset, Icon> icon) {
+	public IconWrapper(Function<PoseOffset, IIcon> icon) {
 		this.icon = IconCache.of(icon);
 	}
 	
 	public void render(PoseOffset pose) {
-		try {
-			icon.apply(pose);
-		} catch (Exception e) {
-			LOGGER.error("渲染错误", e);
-		}
+		icon.apply(pose);
 	}
 	
 	public void render() {
 		icon.apply(PoseOffset.NONE);
 	}
 	
-	public @NotNull Icon getIconBlocking() {
-		Icon icon1 = icon.getLastBlocking();
+	/**
+	 * @return 当渲染出错时返回null
+	 */
+	public @Nullable IIcon getIconBlocking() {
+		IIcon icon1 = icon.getLastBlocking();
 		if (!cache) icon.clear();
 		return icon1;
 	}
 	
-	public byte[] getBytesBlocking() {
+	public byte[] getBytesBlocking() throws IOException {
+		IIcon icon = getIconBlocking();
+		return icon == null ? null : icon.getImage().asByteArray();
+	}
+	
+	public byte[] getBytesBlocking(ExportLogger logger) {
 		try {
-			Icon icon1 = getIconBlocking();
-			return icon1.getImage().asByteArray();
+			return getBytesBlocking();
 		} catch (IOException e) {
-			throw new RuntimeException(e);
+			logger.error("转换图片时出现异常, wrapId=" + wrapId, e);
+			return null;
 		}
 	}
 	
