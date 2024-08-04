@@ -50,12 +50,11 @@ public class ItemIcon implements IIcon {
 		//渲染
 		render();
 		//收尾
-		target.unbindWrite();
 		RenderSystem.restoreProjectionMatrix();
-		
 		image = new NativeImage(target.width, target.height, false);
 		RenderSystem.bindTexture(target.getColorTextureId());
 		image.downloadTexture(0, false);
+		target.destroyBuffers();
 		image.flipY();
 	}
 	
@@ -77,10 +76,10 @@ public class ItemIcon implements IIcon {
 		PoseStack modelView = RenderSystem.getModelViewStack();
 		modelView.pushPose();
 		{
-			offset.apply(modelView);
-			modelView.translate(0, 0, 100.0F);
-			modelView.translate(8.0D, 8.0D, 0.0D);
-			modelView.scale(1.0F, -1.0F, 1.0F);
+			modelView.setIdentity();
+//			offset.apply(modelView);
+			modelView.scale(offset.scale(), offset.scale(), offset.scale());
+			modelView.translate(8.0D, -8.0, 150F);
 			modelView.scale(16.0F, 16.0F, 16.0F);
 			
 			RenderSystem.applyModelViewMatrix();

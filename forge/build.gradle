@@ -7,7 +7,7 @@ architectury {
     forge()
 }
 
-archivesBaseName += "-forge"
+archivesBaseName += "-${rootProject.minecraft_version}-forge"
 
 loom {
     accessWidenerPath = project(":common").loom.accessWidenerPath

@@ -7,7 +7,7 @@ architectury {
     fabric()
 }
 
-archivesBaseName += "-fabric"
+archivesBaseName += "-${rootProject.minecraft_version}-fabric"
 
 loom {
     accessWidenerPath = project(":common").loom.accessWidenerPath

@@ -1,25 +1,26 @@
 package cn.breadnicecat.reciperenderer;
 
 import cn.breadnicecat.reciperenderer.gui.ExportFrame;
+import cn.breadnicecat.reciperenderer.utils.TaskChain;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.mojang.brigadier.CommandDispatcher;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.minecraft.DetectedVersion;
 import net.minecraft.Util;
+import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.File;
-import java.io.IOException;
 import java.net.URL;
-import java.net.URLConnection;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
-import java.util.concurrent.LinkedBlockingDeque;
+
+import static cn.breadnicecat.reciperenderer.utils.VersionControl.getLatestVersion;
 
 /**
  * Created in 2024/7/8 下午5:11
@@ -33,15 +34,15 @@ import java.util.concurrent.LinkedBlockingDeque;
 public class RecipeRenderer {
 	public static final String MOD_ID = "reciperenderer";
 	public static final String MOD_NAME = "Recipe Renderer";
+	public static final String UPDATE_URL = "https://gitee.com/Bread-NiceCat/RecipeRenderer/raw/master/gradle.properties";
 	public static final Logger LOGGER = LogManager.getLogger(MOD_NAME);
 	public static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
 	public static final Base64.Encoder BASE64 = Base64.getEncoder();
 	
-	public static volatile boolean _onRendering = true;
-	
 	public static final ExportFrame exportFrame;
 	public static RPlatform platform;
 	public static String modVersion = null;
+	public static String mcVersion = DetectedVersion.BUILT_IN.getName();
 	static boolean outdated = false;
 	public static String latestVer;
 	/**
@@ -71,44 +72,33 @@ public class RecipeRenderer {
 		}
 		Util.backgroundExecutor().submit(() -> {
 			try {
-				URL url = new URL("https://gitee.com/Bread-NiceCat/RecipeRenderer/raw/master/gradle.properties");
-				LOGGER.info("开始获取版本:{}", url);
-				URLConnection connection = url.openConnection();
-				connection.setConnectTimeout(5000);
-				Properties properties = new Properties();
-				properties.load(connection.getInputStream());
-				latestVer = properties.getProperty("mod_version");
+				latestVer = getLatestVersion(new URL(UPDATE_URL));
 				LOGGER.info("当前版本: {}", modVersion);
 				LOGGER.info("获取到最新版本: {}", latestVer);
 				if (!modVersion.equals(latestVer)) {
 					RecipeRenderer.outdated = true;
 				}
-			} catch (IOException e) {
+			} catch (Exception e) {
 				LOGGER.warn("无法检查更新", e);
 			}
 		});
 	}
 	
-	public static void _onRegisterCMD(CommandDispatcher<CommandSourceStack> dispatcher) {
-		RCommand.init(dispatcher);
+	
+	public static void _onRegisterCMD(CommandBuildContext context, CommandDispatcher<CommandSourceStack> dispatcher) {
+		RCommand.init(context, dispatcher);
 	}
 	
-	private static final LinkedBlockingDeque<Runnable> clientTasks = new LinkedBlockingDeque<>();
+	//head -> tail
+	private static TaskChain tasks = new TaskChain();
 	
 	@Environment(EnvType.CLIENT)
 	public static void _onClientTick() {
-		if (!clientTasks.isEmpty()) {
-			_onRendering = true;
-			clientTasks.removeIf(i -> {
-				i.run();
-				return true;
-			});
-		}
-		_onRendering = false;
+		tasks.run();
 	}
 	
 	public static void hookRenderer(Runnable run) {
-		clientTasks.add(run);
+		tasks.add(run);
 	}
 	
 	public static void export(String modid) {
@@ -128,6 +118,4 @@ public class RecipeRenderer {
 	public enum Platform {
 		FORGE, FABRIC
 	}
-	
-	
 }

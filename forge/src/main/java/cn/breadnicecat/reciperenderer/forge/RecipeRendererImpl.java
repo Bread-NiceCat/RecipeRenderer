@@ -28,7 +28,7 @@ public class RecipeRendererImpl {
 	}
 	
 	public void onRegisterCommands(RegisterCommandsEvent event) {
-		_onRegisterCMD(event.getDispatcher());
+		_onRegisterCMD(event.getBuildContext(), event.getDispatcher());
 	}
 	
 	public void onClientTick(TickEvent.ClientTickEvent event) {

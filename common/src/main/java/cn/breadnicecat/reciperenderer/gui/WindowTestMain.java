@@ -1,10 +1,12 @@
 package cn.breadnicecat.reciperenderer.gui;
 
+import cn.breadnicecat.reciperenderer.gui.screens.EntityViewScreen;
 import cn.breadnicecat.reciperenderer.gui.screens.Screen;
 
 import javax.swing.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
 
 /**
  * Created in 2024/7/25 上午3:15
@@ -20,12 +22,16 @@ public class WindowTestMain {
 	public static void main(String[] args) {
 		ExportFrame exportFrame = new ExportFrame();
 		exportFrame.setAlwaysOnTop(true);
-		exportFrame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-		
 		JFrame cont = new JFrame();
 		JButton next = new JButton("next[0]");
+		
+		EntityViewScreen simple = EntityViewScreen.SIMPLE;
+		
+		BufferedImage bufferedImage = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
+		simple.getView().setIcon(new ImageIcon(bufferedImage));
+		
 		next.addMouseListener(new MouseAdapter() {
-			Screen[] sc = new Screen[]{exportFrame.defaultScreen};
+			Screen[] sc = new Screen[]{exportFrame.defaultScreen, simple};
 			int i = 1;
 			
 			@Override

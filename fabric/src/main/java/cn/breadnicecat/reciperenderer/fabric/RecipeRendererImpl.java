@@ -19,7 +19,7 @@ public class RecipeRendererImpl implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		RecipeRenderer.init(new FabricRPlatform());
-		CommandRegistrationCallback.EVENT.register((dispatcher, a, b) -> RecipeRenderer._onRegisterCMD(dispatcher));
+		CommandRegistrationCallback.EVENT.register((dispatcher, context, b) -> RecipeRenderer._onRegisterCMD(context, dispatcher));
 		ClientTickEvents.START_CLIENT_TICK.register((e) -> RecipeRenderer._onClientTick());
 	}
 	

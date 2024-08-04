@@ -13,6 +13,7 @@ import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.Closeable;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.function.BiFunction;
@@ -26,7 +27,7 @@ import java.util.function.BiFunction;
  *
  * <p>
  **/
-public class ItemEntry implements LocalizableV2, Storable {
+public class ItemEntry implements LocalizableV2, Storable, Closeable {
 	public final ItemStack stack;
 	
 	public int stackSize;
@@ -77,5 +78,11 @@ public class ItemEntry implements LocalizableV2, Storable {
 		object.addProperty("ico32", writer.apply(existHelper.getModified("attachment/ico32/" + id.getPath() + ".png"), ico32.getBytesBlocking(logger)));
 		object.addProperty("ico128", writer.apply(existHelper.getModified("attachment/ico128/" + id.getPath() + ".png"), ico128.getBytesBlocking(logger)));
 		return 2;
+	}
+	
+	@Override
+	public void close() {
+		ico32.clear();
+		ico128.clear();
 	}
 }

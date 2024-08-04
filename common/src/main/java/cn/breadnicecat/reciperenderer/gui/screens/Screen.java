@@ -1,5 +1,7 @@
 package cn.breadnicecat.reciperenderer.gui.screens;
 
+import cn.breadnicecat.reciperenderer.gui.ExportFrame;
+
 import javax.swing.*;
 import java.awt.*;
 
@@ -13,6 +15,8 @@ import java.awt.*;
  * <p>
  **/
 public abstract class Screen extends JPanel {
+	public ExportFrame frame;
+	
 	public abstract Dimension getScreenSize();
 	
 	public void onEnable() {

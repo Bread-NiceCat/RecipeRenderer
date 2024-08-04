@@ -1,7 +1,11 @@
 package cn.breadnicecat.reciperenderer.render;
 
+import cn.breadnicecat.reciperenderer.RecipeRenderer;
 import cn.breadnicecat.reciperenderer.utils.ExportLogger;
 import cn.breadnicecat.reciperenderer.utils.PoseOffset;
+import com.mojang.serialization.DataResult;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -20,33 +24,63 @@ import java.util.function.Function;
 public class IconWrapper {
 	private static final AtomicInteger ids = new AtomicInteger();
 	public final String wrapId = "0x" + Integer.toString(ids.incrementAndGet(), 16);
-	private IconCache icon;
-	private boolean cache;
+	private Function<PoseOffset, IIcon> factory;
+	private volatile DataResult<IIcon> last;
 	
-	public IconWrapper(Function<PoseOffset, IIcon> icon) {
-		this.icon = IconCache.of(icon);
+	public IconWrapper(Function<PoseOffset, IIcon> factory) {
+		this.factory = factory;
 	}
 	
-	public void render(PoseOffset pose) {
-		icon.apply(pose);
+	@Environment(EnvType.CLIENT)
+	public IIcon render(PoseOffset pose) {
+		try {
+			IIcon apply = factory.apply(pose);
+			if (apply != null) {
+				last = DataResult.success(apply);
+				return apply;
+			} else {
+				last = DataResult.error(() -> "未知渲染错误,wrapId" + wrapId);
+			}
+		} catch (Exception e) {
+			last = DataResult.error(() -> e + ",wrapId=" + wrapId);
+		}
+		return null;
 	}
 	
-	public void render() {
-		icon.apply(PoseOffset.NONE);
+	@Environment(EnvType.CLIENT)
+	public IIcon render() {
+		return render(PoseOffset.NONE);
+	}
+	
+	public void clear() {
+		if (last != null) {
+			last.get().ifLeft(IIcon::close);
+			last = null;
+		}
 	}
 	
 	/**
+	 * 一定要调用render，不然会线程死锁
+	 *
 	 * @return 当渲染出错时返回null
 	 */
-	public @Nullable IIcon getIconBlocking() {
-		IIcon icon1 = icon.getLastBlocking();
-		if (!cache) icon.clear();
-		return icon1;
+	public @Nullable IIcon getBlocking() {
+		while (last == null) {
+//			Thread.yield();
+			try {
+				Thread.sleep(100);
+				RecipeRenderer.LOGGER.warn("等待客户端响应...");
+			} catch (InterruptedException ignored) {
+			}
+		}
+		return last.get().orThrow();
 	}
 	
 	public byte[] getBytesBlocking() throws IOException {
-		IIcon icon = getIconBlocking();
-		return icon == null ? null : icon.getImage().asByteArray();
+		try (IIcon icon = getBlocking()) {
+			if (icon == null) return null;
+			return icon.getImage().asByteArray();
+		}
 	}
 	
 	public byte[] getBytesBlocking(ExportLogger logger) {
@@ -58,7 +92,4 @@ public class IconWrapper {
 		}
 	}
 	
-	public void disableCache() {
-		cache = false;
-	}
 }

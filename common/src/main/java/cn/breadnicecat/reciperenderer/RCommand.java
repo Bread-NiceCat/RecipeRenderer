@@ -1,25 +1,29 @@
 package cn.breadnicecat.reciperenderer;
 
-import cn.breadnicecat.reciperenderer.render.EntityIcon;
-import cn.breadnicecat.reciperenderer.render.IconWrapper;
-import cn.breadnicecat.reciperenderer.utils.PoseOffset;
+import cn.breadnicecat.reciperenderer.gui.screens.EntityViewScreen;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.arguments.CompoundTagArgument;
+import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.ResourceArgument;
+import net.minecraft.commands.arguments.item.ItemArgument;
+import net.minecraft.commands.arguments.selector.EntitySelector;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.monster.Zombie;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
 
-import javax.swing.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseWheelEvent;
 import java.io.File;
-import java.io.IOException;
 
 import static cn.breadnicecat.reciperenderer.RecipeRenderer.*;
-import static com.mojang.text2speech.Narrator.LOGGER;
+import static net.minecraft.commands.Commands.argument;
 import static net.minecraft.commands.Commands.literal;
 
 /**
@@ -32,107 +36,54 @@ import static net.minecraft.commands.Commands.literal;
  * <p>
  **/
 public class RCommand {
-	public static void init(CommandDispatcher<CommandSourceStack> dispatcher) {
-		var test = literal("test").executes(c -> {
-			try {
-				LOGGER.info("launch test frame");
-				JFrame frame = new JFrame();
-				frame.setSize(256, 256);
-				IconWrapper zo = new IconWrapper(p -> {
-					Zombie entity = EntityType.ZOMBIE.create(Minecraft.getInstance().level);
-					return new EntityIcon(p, 128, entity);
-				});
-				zo.disableCache();
-				var ico1 = new JLabel() {
-					PoseOffset last = null;
-					boolean lock;
-					
-					void update(PoseOffset o) {
-						if (lock) return;
-						lock = true;
-						if (last == o) {
-							LOGGER.info("skip {}", o);
-							lock = false;
-						} else hookRenderer(() -> {
-							LOGGER.info("update {}", o);
-							zo.render(last = o);
-							try {
-								setIcon(new ImageIcon(zo.getBytesBlocking()));
-							} catch (IOException e) {
-								throw new RuntimeException(e);
-							}
-							lock = false;
-						});
-					}
-				};
-				frame.add(ico1);
-				ico1.update(PoseOffset.NONE);
-				MouseAdapter adapter = new MouseAdapter() {
-					PoseOffset off = PoseOffset.NONE;
-					int pX, pY;
-					
-					int rotType;
-					
-					@Override
-					public void mousePressed(MouseEvent e) {
-						pX = e.getXOnScreen();
-						pY = e.getYOnScreen();
-						if ((e.getModifiersEx() & MouseEvent.BUTTON2_DOWN_MASK) != 0) {
-							off = PoseOffset.NONE;
-							ico1.update(off);
+	public static void init(CommandBuildContext context, CommandDispatcher<CommandSourceStack> dispatcher) {
+		LiteralArgumentBuilder<CommandSourceStack> test = null;
+		if (exportFrame != null) {
+			test = literal("test")
+					.then(literal("entity").then(argument("target", EntityArgument.entity()).executes(c -> {
+						LivingEntity target = (LivingEntity) c.getArgument("target", EntitySelector.class).findSingleEntity(c.getSource());
+						if (target instanceof ServerPlayer) target = Minecraft.getInstance().player;
+						exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(target));
+						return 1;
+					})).then(argument("entity_type", ResourceArgument.resource(context, Registries.ENTITY_TYPE)).suggests((con, bu) -> {
+						BuiltInRegistries.ENTITY_TYPE.entrySet().stream()
+								.filter(k -> k.getValue().isEnabled(con.getSource().enabledFeatures()))
+								.map(k -> k.getKey().location().toString())
+								.forEach(bu::suggest);
+						return bu.buildFuture();
+					}).executes(c -> {
+						if (ResourceArgument.getSummonableEntityType(c, "entity_type").value().create(Minecraft.getInstance().level) instanceof LivingEntity le) {
+							exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(le));
+							return 1;
+						} else {
+							c.getSource().sendFailure(Component.literal("该实体不是一个LivingEntity类型实体"));
+							return -1;
 						}
-					}
-					
-					@Override
-					public void mouseReleased(MouseEvent e) {
-						rotType = 0;
-					}
-					
-					@Override
-					public void mouseDragged(MouseEvent e) {
-						int x = e.getXOnScreen();
-						int y = e.getYOnScreen();
-						int deltaX = x - pX;
-						int deltaY = y - pY;
-						pX = x;
-						pY = y;
-						if ((e.getModifiersEx() & MouseEvent.BUTTON1_DOWN_MASK) != 0) {
-							if (rotType == 0) {
-								if (deltaY > deltaX) {
-									rotType = 2;//Y
-								} else {
-									rotType = 1;//X
-								}
-							}
-							switch (rotType) {
-								case 1 -> off = off.rotate(0, 0, deltaY);
-								case 2 -> off = off.rotate(deltaX, 0, 0);
-							}
-						} else if ((e.getModifiersEx() & MouseEvent.BUTTON3_DOWN_MASK) != 0) {
-							off = off.translate(deltaX, deltaY, 0);
+					}).then(argument("addition_nbt", CompoundTagArgument.compoundTag()).executes(c -> {
+						if (ResourceArgument.getSummonableEntityType(c, "entity_type").value().create(Minecraft.getInstance().level) instanceof LivingEntity le) {
+							le.readAdditionalSaveData(CompoundTagArgument.getCompoundTag(c, "addition_nbt"));
+							exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(le));
+							return 1;
+						} else {
+							c.getSource().sendFailure(Component.literal("该实体不是一个LivingEntity类型实体"));
+							return -1;
 						}
-						ico1.update(off);
-					}
-					
-					@Override
-					public void mouseWheelMoved(MouseWheelEvent e) {
-						off = off.scale(e.getWheelRotation() * -0.1f);
-						ico1.update(off);
-					}
-				};
-				frame.addMouseListener(adapter);
-				frame.addMouseMotionListener(adapter);
-				frame.addMouseWheelListener(adapter);
-				frame.setVisible(true);
-				frame.setAlwaysOnTop(true);
-				c.getSource().sendSystemMessage(Component.literal("测试窗口已打开").withStyle(ChatFormatting.GREEN));
-				LOGGER.info("fine");
-			} catch (Exception e) {
-				LOGGER.error("test error", e);
-				throw new RuntimeException(e);
-			}
-			return 1;
-		});
+					}))))
+					.then(literal("item")
+							.then(literal("hand").executes(c -> {
+								ItemStack target = Minecraft.getInstance().player.getItemInHand(InteractionHand.MAIN_HAND);
+								exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(target));
+								return 1;
+							}))
+							.then(argument("itemId", ItemArgument.item(context))
+									.executes(c -> {
+										ItemStack target = ItemArgument.getItem(c, "itemId").createItemStack(1, false);
+										exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(target));
+										return 1;
+									}))
+					);
+		}
+		
 		//=================================
 		var outdate = literal("ignoreOutdated").executes(c -> {
 			if (outdated) {
@@ -148,7 +99,7 @@ public class RCommand {
 		for (String modid : allMods.keySet()) {
 			builder.then(literal(modid).executes(c -> {
 				if (outdated) {
-					c.getSource().sendFailure(Component.literal("当前版本过低(" + modVersion + ", 最新版:" + latestVer + "), 导出的数据可能与会与最新版有分歧"));
+					c.getSource().sendFailure(Component.literal("当前版本不是已发布的最新版本(" + modVersion + ", 最新版:" + latestVer + "), 导出的数据可能与会与最新版有分歧"));
 					c.getSource().sendSystemMessage(Component.literal("输入\"/reciperenderer ignoreOutdated\"忽略此问题").withStyle(ChatFormatting.YELLOW));
 					return 0;
 				}
@@ -169,7 +120,11 @@ public class RCommand {
 		//=================================
 		var reciperenderer = literal("reciperenderer");
 		var rr = literal("rr");
-		dispatcher.register(reciperenderer.then(builder).then(test).then(outdate).then(open));
+		if (test != null) {
+			reciperenderer.then(test);
+			rr.then(test);
+		}
+		dispatcher.register(reciperenderer.then(builder).then(outdate).then(open));
 		dispatcher.register(rr.then(builder).then(open));
 	}
 	

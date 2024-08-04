@@ -11,7 +11,12 @@ import com.mojang.blaze3d.platform.NativeImage;
  *
  * <p>
  **/
-public interface IIcon {
+public interface IIcon extends AutoCloseable {
 	
 	NativeImage getImage();
+	
+	@Override
+	default void close() {
+		getImage().close();
+	}
 }

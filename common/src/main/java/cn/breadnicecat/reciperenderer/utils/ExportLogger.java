@@ -32,8 +32,7 @@ import static org.apache.logging.log4j.Level.*;
 @Environment(EnvType.CLIENT)
 public class ExportLogger extends PrintWriter {
 	private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss:SSS");
-	private static final ExecutorService executor = Executors.newFixedThreadPool(1);
-	
+	private final ExecutorService executor = Executors.newFixedThreadPool(1);
 	/**
 	 * 防止这个日志崩，挂一个mc日志
 	 */
@@ -85,9 +84,11 @@ public class ExportLogger extends PrintWriter {
 	}
 	
 	int greenOrd = 0;
+	int ord = 0;
 	
 	public void log(Level level, String message) {
 		LocalTime now = LocalTime.now();
+		String name = Thread.currentThread().getName();
 		executor.submit(() -> {
 			try {
 				MutableComponent msg = Component.literal(message).withStyle(switch (level.getStandardLevel()) {
@@ -97,7 +98,8 @@ public class ExportLogger extends PrintWriter {
 					default -> ChatFormatting.WHITE;
 				});
 				Minecraft.getInstance().gui.getChat().addMessage(msg);
-				write("[" + now.format(formatter) + "][" + level + "]" + message + "\n");
+				write("[" + now.format(formatter) + "][" + name + "/" + level + "]" + message + "\n");
+				if (ord % 5 == 0) flush();
 			} catch (Exception ignored) {
 			}
 		});
@@ -105,9 +107,11 @@ public class ExportLogger extends PrintWriter {
 	
 	public void logSilent(Level level, String message) {
 		LocalTime now = LocalTime.now();
+		String name = Thread.currentThread().getName();
 		executor.submit(() -> {
 			logger.log(level, message);
-			write("[" + now.format(formatter) + "][" + level + "]" + message + "\n");
+			write("[" + now.format(formatter) + "][" + name + "/" + level + "]" + message + "\n");
+			if (ord % 5 == 0) flush();
 		});
 	}
 	

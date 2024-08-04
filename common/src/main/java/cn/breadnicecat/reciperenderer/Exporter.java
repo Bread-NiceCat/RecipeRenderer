@@ -9,7 +9,6 @@ import com.mojang.datafixers.util.Pair;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.ChatFormatting;
-import net.minecraft.DetectedVersion;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.language.ClientLanguage;
 import net.minecraft.client.server.IntegratedServer;
@@ -24,6 +23,7 @@ import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
 import org.jetbrains.annotations.Nullable;
@@ -53,15 +53,16 @@ import static cn.breadnicecat.reciperenderer.utils.CommonUtils.byId;
  **/
 @Environment(EnvType.CLIENT)
 public class Exporter {
+	private static final ExecutorService executor = Executors.newFixedThreadPool(1);
 	public final AtomicBoolean validator = new AtomicBoolean(true);
 	
-	private static final ExecutorService executor = Executors.newFixedThreadPool(1);
+	private static Exporter current;
 	static Minecraft instance = Minecraft.getInstance();
-	static IntegratedServer server = instance.getSingleplayerServer();
+	public static final File ROOT_DIR = new File(instance.gameDirectory, "rr_export/");
+	
 	final String modid;
 	
 	Timer startTime;
-	public static final File ROOT_DIR = new File(instance.gameDirectory, "rr_export/");
 	/**
 	 * .minecraft/rr_export/modid
 	 */
@@ -76,7 +77,7 @@ public class Exporter {
 	 */
 	final File logoutfile;
 	
-	private ExportLogger logger;
+	public ExportLogger logger;
 	
 	List<ItemEntry> items = new LinkedList<>();
 	List<EntityEntry> entities = new LinkedList<>();
@@ -97,6 +98,8 @@ public class Exporter {
 	}
 	
 	public void runAsync() {
+		if (current != null) throw new RuntimeException("已经有一个程序在导出了");
+		current = this;
 		executor.submit(this::run);
 		LOGGER.info("异步导出任务创建完成");
 	}
@@ -113,7 +116,7 @@ public class Exporter {
 			outputs_z.setLevel(9);
 			outputs_z.setComment("Exported by " + MOD_NAME + " v" + modVersion
 					+ ", \nTargetMod " + modid + "@" + getVersion(modid)
-					+ ", \nEnvironment Minecraft@" + DetectedVersion.BUILT_IN.getName() + "+" + platform.getName() + "@" + platform.getLoaderVersion());
+					+ ", \nEnvironment Minecraft@" + mcVersion + "+" + platform.getName() + "@" + platform.getLoaderVersion());
 			logger.info("开始导出" + modid);
 			
 			logger.info("开始收集条目");
@@ -131,6 +134,8 @@ public class Exporter {
 			validator.set(false);
 			reportError("遭遇致命错误", e);
 			throw new RuntimeException(e.getMessage(), e);
+		} finally {
+			current = null;
 		}
 		validator.set(false);
 	}
@@ -163,16 +168,6 @@ public class Exporter {
 	
 	private void write(ZipOutputStream output) throws IOException {
 		StringJoiner joiner = new StringJoiner(", ", "共导出", ".");
-		if (!items.isEmpty()) {
-			joiner.add(items.size() + "个物品");
-			logger.info("写入物品");
-			write("item", output, "item.jsons", items);
-		}
-		if (!entities.isEmpty()) {
-			joiner.add(entities.size() + "个实体");
-			logger.info("写入实体");
-			write("entity", output, "entity.jsons", entities);
-		}
 		if (!effects.isEmpty()) {
 			joiner.add(effects.size() + "个药水效果");
 			logger.info("写入药水效果");
@@ -222,6 +217,18 @@ public class Exporter {
 			}
 			
 		}
+		
+		if (!items.isEmpty()) {
+			joiner.add(items.size() + "个物品");
+			logger.info("写入物品");
+			write("item", output, "item.jsons", items);
+		}
+		
+		if (!entities.isEmpty()) {
+			joiner.add(entities.size() + "个实体");
+			logger.info("写入实体");
+			write("entity", output, "entity.jsons", entities);
+		}
 		logger.info(joiner.toString());
 	}
 	
@@ -244,7 +251,7 @@ public class Exporter {
 	
 	private void _collectItem() {
 		logger.info("开始收集物品");
-		CreativeModeTabs.tryRebuildTabContents(instance.level.enabledFeatures(), true, instance.level.registryAccess());
+		CreativeModeTabs.tryRebuildTabContents(FeatureFlags.REGISTRY.allFlags(), true, instance.level.registryAccess());
 		HashMap<ItemState, ItemEntry> holders = new HashMap<>();
 		CreativeModeTabs.allTabs().stream()
 				.map(t -> Pair.of(BuiltInRegistries.CREATIVE_MODE_TAB.getResourceKey(t).orElse(null), t))
@@ -337,6 +344,7 @@ public class Exporter {
 	}
 	
 	private void _collectDim() {
+		IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
 		logger.info("开始获取维度");
 		server.registryAccess().registry(Registries.DIMENSION_TYPE).orElseThrow().entrySet().stream()
 				.filter(i -> i.getKey().location().getNamespace().equals(modid))
@@ -348,6 +356,7 @@ public class Exporter {
 	}
 	
 	private void _collectBiome() {
+		IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
 		logger.info("开始获取生物群系");
 		var list = server.registryAccess().registry(Registries.BIOME).orElseThrow().entrySet().stream()
 				.filter(i -> i.getKey().location().getNamespace().equals(modid))
@@ -413,9 +422,13 @@ public class Exporter {
 				throw new RemoteException("不匹配的版本号: encountered:" + ver + ", expected:" + version);
 			}
 			jsons.add(object);
+			
+			if (storable instanceof Closeable closeable) {
+				closeable.close();
+			}
 		}
-		
 		writeJson(out, fileName, jsons, "#format_version " + storeType + "_v" + version);
+		lists.clear();
 	}
 	
 	private void writeJson(ZipOutputStream out, String fileName, List<JsonObject> jsons, @Nullable String head) throws IOException {
@@ -465,5 +478,9 @@ public class Exporter {
 			return true;
 		}
 		return false;
+	}
+	
+	public static Exporter getInstance() {
+		return current;
 	}
 }

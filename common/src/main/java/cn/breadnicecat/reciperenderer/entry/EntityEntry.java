@@ -12,6 +12,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.Closeable;
 import java.util.function.BiFunction;
 
 /**
@@ -23,7 +24,7 @@ import java.util.function.BiFunction;
  *
  * <p>
  **/
-public class EntityEntry implements Localizable, Storable {
+public class EntityEntry implements Localizable, Storable, Closeable {
 	final EntityType<?> entityType;
 	final Entity entity;
 	
@@ -64,4 +65,8 @@ public class EntityEntry implements Localizable, Storable {
 		this.en = en;
 	}
 	
+	@Override
+	public void close() {
+		ico128.clear();
+	}
 }
