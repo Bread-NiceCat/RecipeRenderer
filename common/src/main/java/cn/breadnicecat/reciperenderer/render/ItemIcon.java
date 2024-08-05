@@ -79,7 +79,10 @@ public class ItemIcon implements IIcon {
 			modelView.setIdentity();
 //			offset.apply(modelView);
 			modelView.scale(offset.scale(), offset.scale(), offset.scale());
-			modelView.translate(8.0D, -8.0, 150F);
+			
+			modelView.translate(0, 0, 50.0F);
+			modelView.translate(8.0D, 8.0D, 0.0D);
+			modelView.scale(1.0F, -1.0F, 1.0F);
 			modelView.scale(16.0F, 16.0F, 16.0F);
 			
 			RenderSystem.applyModelViewMatrix();
