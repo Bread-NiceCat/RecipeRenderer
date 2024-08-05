@@ -53,7 +53,7 @@ import static cn.breadnicecat.reciperenderer.utils.CommonUtils.byId;
  **/
 @Environment(EnvType.CLIENT)
 public class Exporter {
-	private static final ExecutorService executor = Executors.newFixedThreadPool(1);
+	public static final ExecutorService executor = Executors.newFixedThreadPool(1);
 	public final AtomicBoolean validator = new AtomicBoolean(true);
 	
 	private static Exporter current;

@@ -2,7 +2,6 @@ package cn.breadnicecat.reciperenderer;
 
 import cn.breadnicecat.reciperenderer.gui.screens.EntityViewScreen;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.CommandBuildContext;
@@ -37,52 +36,48 @@ import static net.minecraft.commands.Commands.literal;
  **/
 public class RCommand {
 	public static void init(CommandBuildContext context, CommandDispatcher<CommandSourceStack> dispatcher) {
-		LiteralArgumentBuilder<CommandSourceStack> test = null;
-		if (exportFrame != null) {
-			test = literal("test")
-					.then(literal("entity").then(argument("target", EntityArgument.entity()).executes(c -> {
-						LivingEntity target = (LivingEntity) c.getArgument("target", EntitySelector.class).findSingleEntity(c.getSource());
-						if (target instanceof ServerPlayer) target = Minecraft.getInstance().player;
-						exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(target));
+		var test = literal("test")
+				.then(literal("entity").then(argument("target", EntityArgument.entity()).executes(c -> {
+					LivingEntity target = (LivingEntity) c.getArgument("target", EntitySelector.class).findSingleEntity(c.getSource());
+					if (target instanceof ServerPlayer) target = Minecraft.getInstance().player;
+					exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(target));
+					return 1;
+				})).then(argument("entity_type", ResourceArgument.resource(context, Registries.ENTITY_TYPE)).suggests((con, bu) -> {
+					BuiltInRegistries.ENTITY_TYPE.entrySet().stream()
+							.filter(k -> k.getValue().isEnabled(con.getSource().enabledFeatures()))
+							.map(k -> k.getKey().location().toString())
+							.forEach(bu::suggest);
+					return bu.buildFuture();
+				}).executes(c -> {
+					if (ResourceArgument.getSummonableEntityType(c, "entity_type").value().create(Minecraft.getInstance().level) instanceof LivingEntity le) {
+						exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(le));
 						return 1;
-					})).then(argument("entity_type", ResourceArgument.resource(context, Registries.ENTITY_TYPE)).suggests((con, bu) -> {
-						BuiltInRegistries.ENTITY_TYPE.entrySet().stream()
-								.filter(k -> k.getValue().isEnabled(con.getSource().enabledFeatures()))
-								.map(k -> k.getKey().location().toString())
-								.forEach(bu::suggest);
-						return bu.buildFuture();
-					}).executes(c -> {
-						if (ResourceArgument.getSummonableEntityType(c, "entity_type").value().create(Minecraft.getInstance().level) instanceof LivingEntity le) {
-							exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(le));
+					} else {
+						c.getSource().sendFailure(Component.literal("该实体不是一个LivingEntity类型实体"));
+						return -1;
+					}
+				}).then(argument("addition_nbt", CompoundTagArgument.compoundTag()).executes(c -> {
+					if (ResourceArgument.getSummonableEntityType(c, "entity_type").value().create(Minecraft.getInstance().level) instanceof LivingEntity le) {
+						le.readAdditionalSaveData(CompoundTagArgument.getCompoundTag(c, "addition_nbt"));
+						exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(le));
+						return 1;
+					} else {
+						c.getSource().sendFailure(Component.literal("该实体不是一个LivingEntity类型实体"));
+						return -1;
+					}
+				})))).then(literal("item")
+						.then(literal("hand").executes(c -> {
+							ItemStack target = Minecraft.getInstance().player.getItemInHand(InteractionHand.MAIN_HAND);
+							exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(target));
 							return 1;
-						} else {
-							c.getSource().sendFailure(Component.literal("该实体不是一个LivingEntity类型实体"));
-							return -1;
-						}
-					}).then(argument("addition_nbt", CompoundTagArgument.compoundTag()).executes(c -> {
-						if (ResourceArgument.getSummonableEntityType(c, "entity_type").value().create(Minecraft.getInstance().level) instanceof LivingEntity le) {
-							le.readAdditionalSaveData(CompoundTagArgument.getCompoundTag(c, "addition_nbt"));
-							exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(le));
-							return 1;
-						} else {
-							c.getSource().sendFailure(Component.literal("该实体不是一个LivingEntity类型实体"));
-							return -1;
-						}
-					}))))
-					.then(literal("item")
-							.then(literal("hand").executes(c -> {
-								ItemStack target = Minecraft.getInstance().player.getItemInHand(InteractionHand.MAIN_HAND);
-								exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(target));
-								return 1;
-							}))
-							.then(argument("itemId", ItemArgument.item(context))
-									.executes(c -> {
-										ItemStack target = ItemArgument.getItem(c, "itemId").createItemStack(1, false);
-										exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(target));
-										return 1;
-									}))
-					);
-		}
+						}))
+						.then(argument("instance", ItemArgument.item(context))
+								.executes(c -> {
+									ItemStack target = ItemArgument.getItem(c, "instance").createItemStack(1, false);
+									exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(target));
+									return 1;
+								}))
+				);
 		
 		//=================================
 		var outdate = literal("ignoreOutdated").executes(c -> {
@@ -92,6 +87,15 @@ public class RCommand {
 			} else {
 				c.getSource().sendSystemMessage(Component.literal("当前无需处理。").withStyle(ChatFormatting.RED));
 			}
+			return 1;
+		});
+		//=================================
+		var gc = literal("gc").executes(c -> {
+			c.getSource().sendSystemMessage(Component.literal("已唤醒内存垃圾回收器"));
+			long now = Runtime.getRuntime().freeMemory();
+			System.gc();
+			long cleaned = Runtime.getRuntime().freeMemory() - now;
+			c.getSource().sendSystemMessage(Component.literal("清理完成,清理了" + (cleaned / 1024L / 1024L) + "MB"));
 			return 1;
 		});
 		//=================================
@@ -124,8 +128,8 @@ public class RCommand {
 			reciperenderer.then(test);
 			rr.then(test);
 		}
-		dispatcher.register(reciperenderer.then(builder).then(outdate).then(open));
-		dispatcher.register(rr.then(builder).then(open));
+		dispatcher.register(reciperenderer.then(builder).then(outdate).then(gc).then(open));
+		dispatcher.register(rr.then(builder).then(open).then(gc));
 	}
 	
 }

@@ -27,7 +27,17 @@ public class ExportFrame extends JFrame {
 		@Override
 		public void windowClosing(WindowEvent e) {
 //			RecipeRenderer.hookRenderer(() -> System.exit(0));
-			RecipeRenderer.hookRenderer(Minecraft.getInstance()::close);
+			RecipeRenderer.hookRenderer(() -> {
+				try {
+					RecipeRenderer.LOGGER.warn("准备结束mc进程");
+					Minecraft.getInstance().close();
+					Thread.sleep(2000);
+				} catch (InterruptedException ig) {
+					ig.printStackTrace();
+				} finally {
+					System.exit(0);
+				}
+			});
 		}
 	};
 	
@@ -41,7 +51,7 @@ public class ExportFrame extends JFrame {
 	}
 	
 	public void setScreen(Screen screen) {
-		if(this.screen == screen) return;
+		if (this.screen == screen) return;
 		if (this.screen != null) {
 			this.screen.onDisable();
 			screen.frame = null;

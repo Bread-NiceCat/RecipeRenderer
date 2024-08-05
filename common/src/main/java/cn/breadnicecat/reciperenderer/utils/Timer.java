@@ -38,4 +38,8 @@ public class Timer {
 		return System.currentTimeMillis();
 	}
 	
+	@Override
+	public String toString() {
+		return getString();
+	}
 }

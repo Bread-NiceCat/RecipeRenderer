@@ -2,6 +2,7 @@ package cn.breadnicecat.reciperenderer;
 
 import cn.breadnicecat.reciperenderer.gui.ExportFrame;
 import cn.breadnicecat.reciperenderer.utils.TaskChain;
+import cn.breadnicecat.reciperenderer.utils.Timer;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.mojang.brigadier.CommandDispatcher;
@@ -39,7 +40,7 @@ public class RecipeRenderer {
 	public static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
 	public static final Base64.Encoder BASE64 = Base64.getEncoder();
 	
-	public static final ExportFrame exportFrame;
+	public static ExportFrame exportFrame;
 	public static RPlatform platform;
 	public static String modVersion = null;
 	public static String mcVersion = DetectedVersion.BUILT_IN.getName();
@@ -54,7 +55,12 @@ public class RecipeRenderer {
 		LOGGER.info("开始加载 {}!", MOD_NAME);
 		LOGGER.info("设置headless=false");
 		System.setProperty("java.awt.headless", "false");
-		exportFrame = new ExportFrame();
+		Exporter.executor.submit(() -> {
+			Timer t = new Timer();
+			LOGGER.info("正在启动窗口");
+			exportFrame = new ExportFrame();
+			LOGGER.info("窗口启动成功,用时{}", t);
+		});
 	}
 	
 	public static String getVersion(String modid) {
