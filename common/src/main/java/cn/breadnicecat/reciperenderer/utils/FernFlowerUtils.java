@@ -1,9 +1,9 @@
 package cn.breadnicecat.reciperenderer.utils;
 
-import org.jetbrains.java.decompiler.main.Fernflower;
-import org.jetbrains.java.decompiler.main.extern.IFernflowerLogger;
-import org.jetbrains.java.decompiler.main.extern.IFernflowerPreferences;
-import org.jetbrains.java.decompiler.main.extern.IResultSaver;
+import cn.breadnicecat.reciperenderer.includes.org.jetbrains.java.decompiler.main.Fernflower;
+import cn.breadnicecat.reciperenderer.includes.org.jetbrains.java.decompiler.main.extern.IFernflowerLogger;
+import cn.breadnicecat.reciperenderer.includes.org.jetbrains.java.decompiler.main.extern.IFernflowerPreferences;
+import cn.breadnicecat.reciperenderer.includes.org.jetbrains.java.decompiler.main.extern.IResultSaver;
 
 import java.io.File;
 import java.io.IOException;

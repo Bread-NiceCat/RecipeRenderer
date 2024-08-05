@@ -41,6 +41,7 @@ public class ExportFrame extends JFrame {
 	}
 	
 	public void setScreen(Screen screen) {
+		if(this.screen == screen) return;
 		if (this.screen != null) {
 			this.screen.onDisable();
 			screen.frame = null;

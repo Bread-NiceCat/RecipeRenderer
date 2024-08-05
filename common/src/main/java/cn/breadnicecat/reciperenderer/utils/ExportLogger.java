@@ -44,10 +44,12 @@ public class ExportLogger extends PrintWriter {
 	}
 	
 	public void warnSilent(String message) {
+		logger.warn(message);
 		logSilent(WARN, message);
 	}
 	
 	public void infoSilent(String message) {
+		logger.info(message);
 		logSilent(INFO, message);
 	}
 	
@@ -69,13 +71,13 @@ public class ExportLogger extends PrintWriter {
 	
 	public void warn(String message, Throwable throwable) {
 		logger.warn(message, throwable);
-		warn(message + ": " + throwable.getMessage());
+		warn(throwable.toString());
 		exception(throwable);
 	}
 	
 	public void error(String message, Throwable throwable) {
 		logger.error(message, throwable);
-		error(message + ": " + throwable.getMessage());
+		error(throwable.toString());
 		exception(throwable);
 	}
 	
@@ -109,7 +111,6 @@ public class ExportLogger extends PrintWriter {
 		LocalTime now = LocalTime.now();
 		String name = Thread.currentThread().getName();
 		executor.submit(() -> {
-			logger.log(level, message);
 			write("[" + now.format(formatter) + "][" + name + "/" + level + "]" + message + "\n");
 			if (ord % 5 == 0) flush();
 		});

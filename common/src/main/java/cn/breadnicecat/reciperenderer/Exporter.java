@@ -200,7 +200,6 @@ public class Exporter {
 				try {
 					Class<?> clz = entry.getValue();
 					byte[] bytes = cache.get(clz);
-					logger.infoSilent("decompile " + clz.getName());
 					if (bytes == null) {
 						logger.infoSilent("decompiling...");
 						bytes = FernFlowerUtils.decompile(clz).getBytes();
@@ -208,8 +207,9 @@ public class Exporter {
 					} else {
 						logger.infoSilent("decompile SKIPPED");
 					}
+					logger.infoSilent("decompiled " + clz.getName());
 					output.write(bytes);
-				} catch (Exception e) {
+				} catch (Throwable e) {
 					reportError("反编译" + k + "失败", e);
 				} finally {
 					output.closeEntry();
@@ -472,7 +472,7 @@ public class Exporter {
 	private boolean tryRun(String msg, Runnable_WithException<Exception> run, @Nullable Runnable fail) {
 		try {
 			run.run();
-		} catch (Exception e) {
+		} catch (Throwable e) {
 			reportError(msg, e);
 			if (fail != null) fail.run();
 			return true;

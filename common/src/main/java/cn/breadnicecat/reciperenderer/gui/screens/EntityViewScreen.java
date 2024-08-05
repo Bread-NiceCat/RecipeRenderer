@@ -7,10 +7,10 @@ import cn.breadnicecat.reciperenderer.render.IconWrapper;
 import cn.breadnicecat.reciperenderer.render.ItemIcon;
 import cn.breadnicecat.reciperenderer.utils.ExistHelper;
 import cn.breadnicecat.reciperenderer.utils.PoseOffset;
+import com.google.common.io.Files;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
-import org.spongepowered.include.com.google.common.io.Files;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
