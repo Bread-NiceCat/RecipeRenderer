@@ -10,6 +10,7 @@ import com.mojang.blaze3d.vertex.VertexSorting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
@@ -34,18 +35,23 @@ public class EntityIcon implements IIcon {
 	NativeImage image;
 	
 	public EntityIcon(PoseOffset offset, int size, LivingEntity entity) {
+		ProfilerFiller profiler = instance.getProfiler();
+		profiler.push("render_EntityIcon");
 		//开始
 		GuiGraphics graphics = new GuiGraphics(instance, instance.renderBuffers().bufferSource());
-		
 		RenderTarget target = new TextureTarget(size, size, true, Minecraft.ON_OSX);
 		target.bindWrite(true);
 		
 		final float rotateX = -22.5f + offset.xRot(),
 				rotateY = -45f + offset.yRot(),
 				rotateZ = 22.5f + offset.zRot(),
+//		final float rotateX = -22.5f,
+//				rotateY = -45f,
+//				rotateZ = 22.5f,
 				scale = offset.scale() * 0.9f;
 		final int itemDeltaX = offset.x(),
 				itemDeltaY = offset.y();
+		//旋转模型;
 		
 		PoseStack stack = graphics.pose();
 		stack.pushPose();
@@ -56,12 +62,13 @@ public class EntityIcon implements IIcon {
 			Matrix4f p = new Matrix4f().setOrtho(0, size, size, 0, -1000, 1000);
 			RenderSystem.setProjectionMatrix(p, VertexSorting.ORTHOGRAPHIC_Z);
 			RenderSystem.clearColor(1, 1, 1, 0);
-			RenderSystem.disableBlend();
+//			RenderSystem.disableBlend();
 			stack.setIdentity();
-			//旋转模型;
+			
 			stack.mulPose(YP.rotationDegrees(rotateY));
 			stack.mulPose(XP.rotationDegrees(rotateX));
 			stack.mulPose(ZP.rotationDegrees(rotateZ));
+			
 			var hitbox = new HitBox2D(stack.last().pose(), entity);
 //			int entitySz = (int) (size * scale / Math.max(hitbox.width, hitbox.height));
 			int szW = (int) (size * scale / hitbox.width);
@@ -76,14 +83,15 @@ public class EntityIcon implements IIcon {
 					entity);
 		}
 		stack.popPose();
-		
 		//收尾
 		RenderSystem.restoreProjectionMatrix();
+		target.bindRead();
 		image = new NativeImage(target.width, target.height, false);
-		RenderSystem.bindTexture(target.getColorTextureId());
 		image.downloadTexture(0, false);
 		image.flipY();
 		target.destroyBuffers();
+		instance.getMainRenderTarget().bindWrite(true);
+		profiler.pop();
 	}
 	
 	

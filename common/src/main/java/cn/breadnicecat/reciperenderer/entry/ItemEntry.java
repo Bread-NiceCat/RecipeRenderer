@@ -28,7 +28,7 @@ import java.util.function.BiFunction;
  *
  * <p>
  **/
-public class ItemEntry implements LocalizableV2, Storable, Closeable {
+public class ItemEntry implements LocalizableV2, StorableV2, Closeable {
 	public final ItemStack stack;
 	
 	public int stackSize;

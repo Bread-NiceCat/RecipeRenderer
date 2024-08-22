@@ -1,12 +1,14 @@
 package cn.breadnicecat.reciperenderer.gui;
 
+import cn.breadnicecat.reciperenderer.WorldlyExporter;
+import cn.breadnicecat.reciperenderer.gui.screens.DefaultScreen;
 import cn.breadnicecat.reciperenderer.gui.screens.EntityViewScreen;
 import cn.breadnicecat.reciperenderer.gui.screens.Screen;
+import cn.breadnicecat.reciperenderer.gui.screens.WorldlyProgressScreen;
 
 import javax.swing.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.image.BufferedImage;
 
 /**
  * Created in 2024/7/25 上午3:15
@@ -20,18 +22,18 @@ import java.awt.image.BufferedImage;
 @Deprecated(forRemoval = true)
 public class WindowTestMain {
 	public static void main(String[] args) {
-		ExportFrame exportFrame = new ExportFrame();
+		ExportFrame.debug = true;
+		ExportFrame exportFrame = new ExportFrame(3000);
 		exportFrame.setAlwaysOnTop(true);
 		JFrame cont = new JFrame();
+		cont.setTitle("控制器");
 		JButton next = new JButton("next[0]");
-		
 		EntityViewScreen simple = EntityViewScreen.SIMPLE;
-		
-		BufferedImage bufferedImage = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
-		simple.getView().setIcon(new ImageIcon(bufferedImage));
+		simple.getView().setIcon(new ImageIcon(DefaultScreen.imageNow));
+		simple.getView().imgData = new byte[1024];
 		
 		next.addMouseListener(new MouseAdapter() {
-			Screen[] sc = new Screen[]{exportFrame.defaultScreen, simple};
+			Screen[] sc = new Screen[]{exportFrame.defaultScreen, simple, new WorldlyProgressScreen(new WorldlyExporter(1000))};
 			int i = 1;
 			
 			@Override

@@ -1,14 +1,15 @@
 package cn.breadnicecat.reciperenderer.gui;
 
+import cn.breadnicecat.reciperenderer.Exporter;
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
 import cn.breadnicecat.reciperenderer.gui.screens.DefaultScreen;
 import cn.breadnicecat.reciperenderer.gui.screens.Screen;
-import net.minecraft.client.Minecraft;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.awt.event.WindowListener;
+import java.io.File;
 
 /**
  * Created in 2024/7/25 上午3:13
@@ -22,32 +23,34 @@ import java.awt.event.WindowListener;
 public class ExportFrame extends JFrame {
 	public final DefaultScreen defaultScreen = new DefaultScreen();
 	private Screen screen;
-	private boolean busy;
-	public WindowListener exitListener = new WindowAdapter() {
-		@Override
-		public void windowClosing(WindowEvent e) {
-//			RecipeRenderer.hookRenderer(() -> System.exit(0));
-			RecipeRenderer.hookRenderer(() -> {
-				try {
-					RecipeRenderer.LOGGER.warn("准备结束mc进程");
-					Minecraft.getInstance().close();
-					Thread.sleep(2000);
-				} catch (InterruptedException ig) {
-					ig.printStackTrace();
-				} finally {
-					System.exit(0);
-				}
-			});
-		}
-	};
+	public @Nullable Timer freeTimer;
+	static boolean debug = false;
 	
-	public ExportFrame() {
+	public ExportFrame(int timeout) {
 		setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+		addWindowListener(new WindowAdapter() {
+			@Override
+			public void windowClosing(WindowEvent e) {
+				free();
+			}
+		});
+		if (timeout > 0) freeTimer = new Timer(timeout, (e) -> {
+			((Timer) e.getSource()).stop();
+			free();
+		});
 		setResizable(false);
 		setTitle(RecipeRenderer.MOD_NAME);
 		setScreen(defaultScreen);
-		setVisible(true);
-		addWindowListener(exitListener);
+	}
+	
+	public ExportFrame() {
+		this(-1);
+	}
+	
+	final static File D_ROOT_DIR = new File(".");
+	
+	public static File getRootPath() {
+		return debug ? D_ROOT_DIR : Exporter.ROOT_DIR;
 	}
 	
 	public void setScreen(Screen screen) {
@@ -57,13 +60,19 @@ public class ExportFrame extends JFrame {
 			screen.frame = null;
 			remove(this.screen);
 		}
-		if (screen != defaultScreen) busy = true;
+		this.setVisible(true);
 		this.screen = screen;
+		
+		if (isBusy()) {
+			if (freeTimer != null) freeTimer.stop();
+		} else {
+			if (freeTimer != null) freeTimer.start();
+		}
+		
 		add(screen);
-		setSize(screen.getScreenSize());
 		screen.frame = this;
+		setSize(screen.getScreenSize());
 		screen.onEnable();
-		repaint();
 	}
 	
 	public Screen getScreen() {
@@ -71,13 +80,16 @@ public class ExportFrame extends JFrame {
 	}
 	
 	public boolean isBusy() {
-		return busy;
+		return screen != defaultScreen;
 	}
 	
 	public void free() {
-		setScreen(defaultScreen);
-		this.busy = false;
+		if (!isBusy()) {
+			setVisible(false);
+			if (freeTimer != null && freeTimer.isRunning()) freeTimer.stop();
+		} else {
+			setScreen(defaultScreen);
+		}
 	}
-	
 	
 }

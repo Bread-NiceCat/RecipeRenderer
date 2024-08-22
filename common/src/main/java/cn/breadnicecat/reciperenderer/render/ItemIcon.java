@@ -14,6 +14,8 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.util.profiling.ProfilerFiller;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
@@ -33,29 +35,41 @@ import org.joml.Matrix4f;
  **/
 public class ItemIcon implements IIcon {
 	private final Minecraft instance = Minecraft.getInstance();
+	private final LivingEntity holder;
 	RenderTarget target;
+	final int size;
 	ItemStack item;
 	PoseOffset offset;
 	NativeImage image;
 	
 	public ItemIcon(PoseOffset pose, int size, ItemStack item) {
+		this(pose, size, item, null);
+	}
+	
+	public ItemIcon(PoseOffset pose, int size, ItemStack item, LivingEntity holder) {
+		ProfilerFiller profiler = instance.getProfiler();
+		profiler.push("render_ItemIcon");
 		offset = pose;
+		this.size = size;
 		this.item = item;
+		this.holder = holder;
 		//开始
 		target = new TextureTarget(size, size, true, Minecraft.ON_OSX);
 		RenderSystem.backupProjectionMatrix();
-		Matrix4f p = new Matrix4f().setOrtho(0, 16, 16, 0, -150, 150);
+		Matrix4f p = new Matrix4f().setOrtho(0, 16, 16, 0, -1000, 1000);
 		RenderSystem.setProjectionMatrix(p, VertexSorting.ORTHOGRAPHIC_Z);
 		target.bindWrite(true);
 		//渲染
 		render();
 		//收尾
 		RenderSystem.restoreProjectionMatrix();
+		target.bindRead();
 		image = new NativeImage(target.width, target.height, false);
-		RenderSystem.bindTexture(target.getColorTextureId());
 		image.downloadTexture(0, false);
 		target.destroyBuffers();
 		image.flipY();
+		instance.getMainRenderTarget().bindWrite(true);
+		profiler.pop();
 	}
 	
 	@Override
@@ -64,8 +78,8 @@ public class ItemIcon implements IIcon {
 	}
 	
 	protected void render() {
-		ItemRenderer client = instance.getItemRenderer();
-		this.render(item, client.getModel(item, null, null, 0), client);
+		ItemRenderer renderer = instance.getItemRenderer();
+		this.render(item, renderer.getModel(item, holder == null ? null : holder.level(), holder, 0), renderer);
 	}
 	
 	protected void render(ItemStack stack, BakedModel model, ItemRenderer renderer) {
@@ -73,33 +87,22 @@ public class ItemIcon implements IIcon {
 		RenderSystem.enableBlend();
 		RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
 		RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-		PoseStack modelView = RenderSystem.getModelViewStack();
-		modelView.pushPose();
+		PoseStack poseStack = RenderSystem.getModelViewStack();
+		poseStack.pushPose();
 		{
-			modelView.setIdentity();
-//			offset.apply(modelView);
-			modelView.scale(offset.scale(), offset.scale(), offset.scale());
-			
-			modelView.translate(0, 0, 50.0F);
-			modelView.translate(8.0D, 8.0D, 0.0D);
-			modelView.scale(1.0F, -1.0F, 1.0F);
-			modelView.scale(16.0F, 16.0F, 16.0F);
-			
+			poseStack.setIdentity();
+			float mu = 16f / size;
+			poseStack.translate(8.0 + offset.x() * mu, 8.0 + offset.y() * mu, (model.isGui3d() ? 150 : 0) + offset.z() * mu);
+			poseStack.scale(16.0F * offset.scale(), -16.0F * offset.scale(), 16.0F * offset.scale());
 			RenderSystem.applyModelViewMatrix();
 			MultiBufferSource.BufferSource immediate = instance.renderBuffers().bufferSource();
-			boolean bl = !model.usesBlockLight();
-			if (bl) {
-				Lighting.setupForFlatItems();
-			}
-			renderer.render(stack, ItemDisplayContext.GUI, false, new PoseStack(), immediate, 15728880, OverlayTexture.NO_OVERLAY, model);
+			Lighting.setupForFlatItems();
+			renderer.render(stack, ItemDisplayContext.GUI, false, new PoseStack(), immediate, 0xF000F0, OverlayTexture.NO_OVERLAY, model);
 			immediate.endBatch();
 			RenderSystem.enableDepthTest();
-			if (bl) {
-				Lighting.setupFor3DItems();
-			}
+			Lighting.setupFor3DItems();
 		}
-		modelView.popPose();
-		RenderSystem.applyModelViewMatrix();
+		poseStack.popPose();
 	}
 	
 }

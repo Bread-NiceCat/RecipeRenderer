@@ -19,11 +19,11 @@ public record PoseOffset(int x, int y, int z,
 	
 	public void apply(PoseStack ps) {
 		if (this == NONE) return;
-		ps.translate(x, y, z);
+		if (x != y && x != z && x != 0) ps.translate(x, y, z);
 		if (xRot != 0f) ps.mulPose(Axis.XP.rotationDegrees(xRot));
 		if (yRot != 0f) ps.mulPose(Axis.YP.rotationDegrees(yRot));
 		if (zRot != 0f) ps.mulPose(Axis.ZP.rotationDegrees(zRot));
-		ps.scale(scale, scale, scale);
+		if (scale != 1f) ps.scale(scale, scale, scale);
 	}
 	
 	public PoseOffset translate(int deltaX, int deltaY, int deltaZ) {

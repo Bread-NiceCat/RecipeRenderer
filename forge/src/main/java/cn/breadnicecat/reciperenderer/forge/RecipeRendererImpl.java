@@ -2,6 +2,7 @@ package cn.breadnicecat.reciperenderer.forge;
 
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.data.loading.DatagenModLoader;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -21,6 +22,7 @@ import static cn.breadnicecat.reciperenderer.RecipeRenderer.*;
 @Mod(MOD_ID)
 public class RecipeRendererImpl {
 	public RecipeRendererImpl() {
+		if (DatagenModLoader.isRunningDataGen()) return;
 		RecipeRenderer.init(new ForgeRPlatform());
 		IEventBus eventBus = MinecraftForge.EVENT_BUS;
 		eventBus.addListener(this::onRegisterCommands);
@@ -31,7 +33,7 @@ public class RecipeRendererImpl {
 		_onRegisterCMD(event.getBuildContext(), event.getDispatcher());
 	}
 	
-	public void onClientTick(TickEvent.ClientTickEvent event) {
-		_onClientTick();
+	public void onClientTick(TickEvent.RenderTickEvent event) {
+		if (event.phase == TickEvent.Phase.END) _onClientTick();
 	}
 }

@@ -1,6 +1,6 @@
 package cn.breadnicecat.reciperenderer.render;
 
-import cn.breadnicecat.reciperenderer.RecipeRenderer;
+import cn.breadnicecat.reciperenderer.Exporter;
 import cn.breadnicecat.reciperenderer.utils.ExportLogger;
 import cn.breadnicecat.reciperenderer.utils.PoseOffset;
 import com.mojang.serialization.DataResult;
@@ -69,7 +69,7 @@ public class IconWrapper {
 //			Thread.yield();
 			try {
 				Thread.sleep(100);
-				RecipeRenderer.LOGGER.warn("等待客户端响应...");
+				Exporter.current.logger.warnSilent("等待客户端响应...");
 			} catch (InterruptedException ignored) {
 			}
 		}

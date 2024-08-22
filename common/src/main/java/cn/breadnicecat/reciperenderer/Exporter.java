@@ -2,20 +2,17 @@ package cn.breadnicecat.reciperenderer;
 
 import cn.breadnicecat.reciperenderer.entry.*;
 import cn.breadnicecat.reciperenderer.render.IconWrapper;
-import cn.breadnicecat.reciperenderer.utils.Timer;
 import cn.breadnicecat.reciperenderer.utils.*;
 import com.google.gson.JsonObject;
 import com.mojang.datafixers.util.Pair;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.language.ClientLanguage;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.locale.Language;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
@@ -35,7 +32,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
-import java.util.zip.GZIPOutputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -53,16 +49,17 @@ import static cn.breadnicecat.reciperenderer.utils.CommonUtils.byId;
  **/
 @Environment(EnvType.CLIENT)
 public class Exporter {
-	public static final ExecutorService executor = Executors.newFixedThreadPool(1);
+	public static final ExecutorService executor = Executors.newWorkStealingPool();
 	public final AtomicBoolean validator = new AtomicBoolean(true);
 	
-	private static Exporter current;
+	public static Exporter current;
 	static Minecraft instance = Minecraft.getInstance();
-	public static final File ROOT_DIR = new File(instance.gameDirectory, "rr_export/");
+	public static File ROOT_DIR = new File(instance.gameDirectory, "rr_export/");
+	public static File WORLDLY = new File(ROOT_DIR, "worldly");
 	
 	final String modid;
 	
-	Timer startTime;
+	RTimer startTime;
 	/**
 	 * .minecraft/rr_export/modid
 	 */
@@ -87,6 +84,7 @@ public class Exporter {
 	List<DimensionEntry> dimensions = new LinkedList<>();
 	List<JsonObject> recipes = new LinkedList<>();
 	Map<String, Class<?>> recipeTypes = new TreeMap<>();
+	
 	List<List<? extends LocalizableV2>> localizable = List.of(items, entities, enchantments, effects);
 	
 	public Exporter(String modid) {
@@ -100,19 +98,19 @@ public class Exporter {
 	public void runAsync() {
 		if (current != null) throw new RuntimeException("已经有一个程序在导出了");
 		current = this;
+		logger = new ExportLogger(LOGGER);
 		executor.submit(this::run);
-		LOGGER.info("异步导出任务创建完成");
+		logger.info("异步导出任务创建完成");
 	}
 	
 	private void run() {
 		if (startTime != null) {
 			throw new RuntimeException("重复使用的Exporter");
 		}
-		this.startTime = new Timer();
-		LOGGER.info("开始初始化");
+		this.startTime = new RTimer();
+		logger.info("开始初始化");
 		modRoot.mkdirs();
-		try (var logger = this.logger = new ExportLogger(new GZIPOutputStream(new FileOutputStream(logoutfile)), LOGGER);
-		     var outputs_z = new ZipOutputStream(new FileOutputStream(outputfile))) {
+		try (var outputs_z = new ZipOutputStream(new FileOutputStream(outputfile))) {
 			outputs_z.setLevel(9);
 			outputs_z.setComment("Exported by " + MOD_NAME + " v" + modVersion
 					+ ", \nTargetMod " + modid + "@" + getVersion(modid)
@@ -153,7 +151,6 @@ public class Exporter {
 		tryRun("导出附魔时遇到致命错误", this::_collectEnchant, enchantments::clear);
 		tryRun("导出生物群系时遇到致命错误", this::_collectBiome, biomes::clear);
 		tryRun("导出维度时遇到致命错误", this::_collectDim, dimensions::clear);
-		
 		_collectLang();
 	}
 	
@@ -162,7 +159,10 @@ public class Exporter {
 			scheduleRender(i.id.getPath() + "_ico32", i.ico32);
 			scheduleRender(i.id.getPath() + "_ico128", i.ico128);
 		});
-		entities.forEach(i -> scheduleRender(i.id.getPath() + "_ico128", i.ico128));
+		entities.forEach(i -> {
+			scheduleRender(i.id.getPath() + "_ico32", i.ico32);
+			scheduleRender(i.id.getPath() + "_ico128", i.ico128);
+		});
 	}
 	
 	
@@ -239,7 +239,9 @@ public class Exporter {
 			if (validator.get()) {
 				if (name != null) logger.infoSilent("开始渲染：" + name + ",wrapId=" + ico.wrapId);
 				try {
+					instance.getProfiler().push("Render Exporter Icon");
 					ico.render();
+					instance.getProfiler().pop();
 				} catch (Exception e) {
 					reportError(name + "渲染失败,wrapId=" + ico.wrapId, e);
 				}
@@ -353,6 +355,7 @@ public class Exporter {
 					logger.infoSilent(location.toString());
 					dimensions.add(new DimensionEntry(location, byId(location.getPath()), i.getValue()));
 				});
+		
 	}
 	
 	private void _collectBiome() {
@@ -393,7 +396,7 @@ public class Exporter {
 	//========================================
 	final ExistHelper existHelper = new ExistHelper();
 	
-	public <S extends Storable> void write(String storeType, ZipOutputStream out, String fileName, List<S> lists) throws IOException {
+	public <S extends StorableV2> void write(String storeType, ZipOutputStream out, String fileName, List<S> lists) throws IOException {
 		if (lists == null || lists.isEmpty()) return;
 		BiFunction<String, byte @Nullable [], String> writer = (path, data) -> {
 			try {
@@ -455,12 +458,7 @@ public class Exporter {
 	}
 	
 	private void reportError(String msg, Throwable e) {
-		if (logger != null) {
-			logger.error(msg, e);
-		} else {
-			LOGGER.error(msg, e);
-			instance.gui.getChat().addMessage(Component.literal(msg + "," + e.getMessage()).withStyle(ChatFormatting.RED));
-		}
+		logger.error(msg, e);
 	}
 	
 	

@@ -13,6 +13,9 @@ import java.util.function.Supplier;
  */
 public class CommonUtils {
 	
+	public static <T> T make(Supplier<T> t) {
+		return t.get();
+	}
 	
 	public static Class<?> getCaller() {
 		return StackLocatorUtil.getCallerClass(3);//因为要再调用getCaller(int)所以要+1
@@ -53,10 +56,11 @@ public class CommonUtils {
 	}
 	
 	@SafeVarargs
-	public static <I> void visit(I visitor, Consumer<I>... house) {
+	public static <I> I make(I visitor, Consumer<I>... house) {
 		for (Consumer<I> h : house) {
 			h.accept(visitor);
 		}
+		return visitor;
 	}
 	
 	@Contract()//把->fail顶掉

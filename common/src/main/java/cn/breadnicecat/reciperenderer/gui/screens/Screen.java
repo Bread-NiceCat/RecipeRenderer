@@ -17,6 +17,7 @@ import java.awt.*;
 public abstract class Screen extends JPanel {
 	public ExportFrame frame;
 	
+	
 	public abstract Dimension getScreenSize();
 	
 	public void onEnable() {

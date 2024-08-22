@@ -24,18 +24,20 @@ import java.util.function.BiFunction;
  *
  * <p>
  **/
-public class EntityEntry implements Localizable, Storable, Closeable {
+public class EntityEntry implements Localizable, StorableV2, Closeable {
 	final EntityType<?> entityType;
 	final Entity entity;
 	
-	public IconWrapper ico128;
 	public ResourceLocation id;
 	public String zh;
 	public String en;
+	public IconWrapper ico32;
+	public IconWrapper ico128;
 	
 	public EntityEntry(ResourceLocation id, LivingEntity entity) {
 		this.entityType = entity.getType();
 		this.id = id;
+		ico32 = new IconWrapper((pose) -> new EntityIcon(pose, 32, entity));
 		ico128 = new IconWrapper((pose) -> new EntityIcon(pose, 128, entity));
 		this.entity = entity;
 	}
@@ -45,8 +47,9 @@ public class EntityEntry implements Localizable, Storable, Closeable {
 		object.addProperty("id", id.toString());
 		object.addProperty("zh", zh);
 		object.addProperty("en", en);
-		object.addProperty("ico", writer.apply(existHelper.getModified("attachment/entity/" + id.getPath() + ".png"), ico128.getBytesBlocking(logger)));
-		return 1;
+		object.addProperty("ico128", writer.apply(existHelper.getModified("attachment/entity/" + id.getPath() + ".png"), ico128.getBytesBlocking(logger)));
+		object.addProperty("ico32", writer.apply(existHelper.getModified("attachment/entity32/" + id.getPath() + ".png"), ico32.getBytesBlocking(logger)));
+		return 2;
 	}
 	
 	

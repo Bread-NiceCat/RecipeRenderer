@@ -1,8 +1,9 @@
 package cn.breadnicecat.reciperenderer;
 
 import cn.breadnicecat.reciperenderer.gui.ExportFrame;
+import cn.breadnicecat.reciperenderer.gui.screens.WorldlyProgressScreen;
+import cn.breadnicecat.reciperenderer.utils.RTimer;
 import cn.breadnicecat.reciperenderer.utils.TaskChain;
-import cn.breadnicecat.reciperenderer.utils.Timer;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.mojang.brigadier.CommandDispatcher;
@@ -10,8 +11,10 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.DetectedVersion;
 import net.minecraft.Util;
+import net.minecraft.client.Minecraft;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.util.profiling.ProfilerFiller;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -40,7 +43,7 @@ public class RecipeRenderer {
 	public static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
 	public static final Base64.Encoder BASE64 = Base64.getEncoder();
 	
-	public static ExportFrame exportFrame;
+	private static ExportFrame exportFrame;
 	public static RPlatform platform;
 	public static String modVersion = null;
 	public static String mcVersion = DetectedVersion.BUILT_IN.getName();
@@ -51,32 +54,43 @@ public class RecipeRenderer {
 	 */
 	public static final Map<String, String> allMods = new HashMap<>();
 	
-	static {
-		LOGGER.info("开始加载 {}!", MOD_NAME);
-		LOGGER.info("设置headless=false");
-		System.setProperty("java.awt.headless", "false");
-		Exporter.executor.submit(() -> {
-			Timer t = new Timer();
-			LOGGER.info("正在启动窗口");
-			exportFrame = new ExportFrame();
-			LOGGER.info("窗口启动成功,用时{}", t);
-		});
-	}
-	
 	public static String getVersion(String modid) {
 		return allMods.get(modid);
+	}
+	
+	private static ExportFrame launchWindow() {
+		RTimer t = new RTimer();
+		LOGGER.info("正在启动窗口");
+		exportFrame = new ExportFrame(5000);
+		LOGGER.info("窗口启动成功,用时{}", t);
+		return exportFrame;
+	}
+	
+	public static ExportFrame getWindow() {
+		return exportFrame != null ? exportFrame : launchWindow();
 	}
 	
 	@Environment(EnvType.CLIENT)
 	public static void init(RPlatform rr) {
 		RecipeRenderer.platform = rr;
+		LOGGER.info("开始加载 {}!", MOD_NAME);
+		
 		try {
 			platform.listMods().forEach(i -> allMods.put(i, platform.getVersion(i)));
 			modVersion = allMods.get(MOD_ID);
 		} catch (Exception e) {
 			LOGGER.error("获取Mod实例时出现异常", e);
 		}
-		Util.backgroundExecutor().submit(() -> {
+		
+		Exporter.executor.submit(() -> {
+			LOGGER.info("设置headless=false");
+			System.setProperty("java.awt.headless", "false");
+			//先初始化
+			launchWindow().free();
+		});
+		
+		
+		Exporter.executor.submit(() -> {
 			try {
 				latestVer = getLatestVersion(new URL(UPDATE_URL));
 				LOGGER.info("当前版本: {}", modVersion);
@@ -96,11 +110,15 @@ public class RecipeRenderer {
 	}
 	
 	//head -> tail
+	@Environment(EnvType.CLIENT)
 	private static TaskChain tasks = new TaskChain();
 	
 	@Environment(EnvType.CLIENT)
 	public static void _onClientTick() {
-		tasks.run();
+		ProfilerFiller profiler = Minecraft.getInstance().getProfiler();
+		profiler.push("rr_onClientTick");
+		tasks.run(profiler);
+		profiler.pop();
 	}
 	
 	public static void hookRenderer(Runnable run) {
@@ -119,6 +137,10 @@ public class RecipeRenderer {
 		} catch (Exception e) {
 			throw new RuntimeException(e.getMessage(), e);
 		}
+	}
+	
+	public static void worldlyExportFixed(int scanCount) {
+		exportFrame.setScreen(new WorldlyProgressScreen(new WorldlyExporter(scanCount)));
 	}
 	
 	public enum Platform {

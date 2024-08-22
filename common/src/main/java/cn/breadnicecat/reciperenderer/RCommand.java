@@ -1,7 +1,11 @@
 package cn.breadnicecat.reciperenderer;
 
 import cn.breadnicecat.reciperenderer.gui.screens.EntityViewScreen;
+import cn.breadnicecat.reciperenderer.render.IconWrapper;
+import cn.breadnicecat.reciperenderer.render.ItemIcon;
+import cn.breadnicecat.reciperenderer.utils.RTimer;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.CommandBuildContext;
@@ -11,7 +15,7 @@ import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.commands.arguments.ResourceArgument;
 import net.minecraft.commands.arguments.item.ItemArgument;
 import net.minecraft.commands.arguments.selector.EntitySelector;
-import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.commands.synchronization.SuggestionProviders;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -36,47 +40,57 @@ import static net.minecraft.commands.Commands.literal;
  **/
 public class RCommand {
 	public static void init(CommandBuildContext context, CommandDispatcher<CommandSourceStack> dispatcher) {
+		EntityViewScreen scn = EntityViewScreen.SIMPLE;
+		Minecraft instance = Minecraft.getInstance();
+		var worldly = literal("worldly")
+				.then(literal("collect")
+						.then(literal("fixed")
+								.then(argument("scan_count", IntegerArgumentType.integer()).executes(c -> {
+									RecipeRenderer.worldlyExportFixed(20000);
+									return 1;
+								}))
+								.executes(c -> {
+									RecipeRenderer.worldlyExportFixed(IntegerArgumentType.getInteger(c, "scan_count"));
+									return 1;
+								}))
+				);
+		//=================================
 		var test = literal("test")
 				.then(literal("entity").then(argument("target", EntityArgument.entity()).executes(c -> {
-					LivingEntity target = (LivingEntity) c.getArgument("target", EntitySelector.class).findSingleEntity(c.getSource());
-					if (target instanceof ServerPlayer) target = Minecraft.getInstance().player;
-					exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(target));
-					return 1;
-				})).then(argument("entity_type", ResourceArgument.resource(context, Registries.ENTITY_TYPE)).suggests((con, bu) -> {
-					BuiltInRegistries.ENTITY_TYPE.entrySet().stream()
-							.filter(k -> k.getValue().isEnabled(con.getSource().enabledFeatures()))
-							.map(k -> k.getKey().location().toString())
-							.forEach(bu::suggest);
-					return bu.buildFuture();
-				}).executes(c -> {
-					if (ResourceArgument.getSummonableEntityType(c, "entity_type").value().create(Minecraft.getInstance().level) instanceof LivingEntity le) {
-						exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(le));
-						return 1;
-					} else {
-						c.getSource().sendFailure(Component.literal("该实体不是一个LivingEntity类型实体"));
-						return -1;
-					}
-				}).then(argument("addition_nbt", CompoundTagArgument.compoundTag()).executes(c -> {
-					if (ResourceArgument.getSummonableEntityType(c, "entity_type").value().create(Minecraft.getInstance().level) instanceof LivingEntity le) {
-						le.readAdditionalSaveData(CompoundTagArgument.getCompoundTag(c, "addition_nbt"));
-						exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(le));
-						return 1;
-					} else {
-						c.getSource().sendFailure(Component.literal("该实体不是一个LivingEntity类型实体"));
-						return -1;
-					}
-				})))).then(literal("item")
-						.then(literal("hand").executes(c -> {
-							ItemStack target = Minecraft.getInstance().player.getItemInHand(InteractionHand.MAIN_HAND);
-							exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(target));
+							LivingEntity target = (LivingEntity) c.getArgument("target", EntitySelector.class).findSingleEntity(c.getSource());
+							if (target instanceof ServerPlayer) target = instance.player;
+							getWindow().setScreen(scn.setTarget(target));
 							return 1;
 						}))
+				).then(literal("entity_type").then(argument("entity_type", ResourceArgument.resource(context, Registries.ENTITY_TYPE)).suggests(SuggestionProviders.SUMMONABLE_ENTITIES).executes(c -> {
+							if (ResourceArgument.getSummonableEntityType(c, "entity_type").value().create(instance.level) instanceof LivingEntity le) {
+								getWindow().setScreen(scn.setTarget(le));
+								return 1;
+							} else {
+								c.getSource().sendFailure(Component.literal("该实体不是一个LivingEntity类型实体"));
+								return -1;
+							}
+						}).then(argument("addition_nbt", CompoundTagArgument.compoundTag()).executes(c -> {
+							if (ResourceArgument.getSummonableEntityType(c, "entity_type").value().create(instance.level) instanceof LivingEntity le) {
+								le.readAdditionalSaveData(CompoundTagArgument.getCompoundTag(c, "addition_nbt"));
+								getWindow().setScreen(scn.setTarget(le));
+								return 1;
+							} else {
+								c.getSource().sendFailure(Component.literal("该实体不是一个LivingEntity类型实体"));
+								return -1;
+							}
+						})))
+				).then(literal("item")
 						.then(argument("instance", ItemArgument.item(context))
 								.executes(c -> {
 									ItemStack target = ItemArgument.getItem(c, "instance").createItemStack(1, false);
-									exportFrame.setScreen(EntityViewScreen.SIMPLE.setTarget(target));
+									getWindow().setScreen(scn.setTarget(target));
 									return 1;
 								}))
+				).then(literal("hand").executes(c -> {
+							getWindow().setScreen(scn._setTarget(new IconWrapper((o) -> new ItemIcon(o, 128, instance.player.getItemInHand(InteractionHand.MAIN_HAND), scn.getUseOverride() ? instance.player : null)), true, false, true));
+							return 1;
+						})
 				);
 		
 		//=================================
@@ -92,10 +106,11 @@ public class RCommand {
 		//=================================
 		var gc = literal("gc").executes(c -> {
 			c.getSource().sendSystemMessage(Component.literal("已唤醒内存垃圾回收器"));
+			RTimer t = new RTimer();
 			long now = Runtime.getRuntime().freeMemory();
 			System.gc();
 			long cleaned = Runtime.getRuntime().freeMemory() - now;
-			c.getSource().sendSystemMessage(Component.literal("清理完成,清理了" + (cleaned / 1024L / 1024L) + "MB"));
+			c.getSource().sendSystemMessage(Component.literal("清理完成,清理了" + (cleaned / 1024L / 1024L) + "MB,用时" + t));
 			return 1;
 		});
 		//=================================
@@ -117,7 +132,9 @@ public class RCommand {
 			}));
 		}
 		//=================================
-		var open = literal("open").executes((c) -> open(Exporter.ROOT_DIR));
+		var open = literal("open")
+				.then(literal("worldly").executes((c) -> open(Exporter.WORLDLY)))
+				.executes((c) -> open(Exporter.ROOT_DIR));
 		for (String modid : allMods.keySet()) {
 			open.then(literal(modid).executes(c -> open(new File(Exporter.ROOT_DIR, modid))));
 		}
@@ -128,8 +145,8 @@ public class RCommand {
 			reciperenderer.then(test);
 			rr.then(test);
 		}
-		dispatcher.register(reciperenderer.then(builder).then(outdate).then(gc).then(open));
-		dispatcher.register(rr.then(builder).then(open).then(gc));
+		dispatcher.register(reciperenderer.then(builder).then(worldly).then(outdate).then(gc).then(open));
+		dispatcher.register(rr.then(builder).then(worldly).then(open).then(gc));
 	}
 	
 }

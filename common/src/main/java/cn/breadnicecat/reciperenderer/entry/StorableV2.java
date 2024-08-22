@@ -16,14 +16,10 @@ import java.util.function.BiFunction;
  * 任何Entry都应该实现此接口,导出了不序列化有啥用？
  * <p>
  **/
-public interface Storable extends StorableV2 {
+public interface StorableV2 {
 	/**
-	 * 返回当前数据版本，任何改动都应该向站长报备并且+1
+	 * @param extraWriter <将要写入的path，数据byte[]> 如果写入成功则返回完整的引用路径，否则为null
 	 */
-	int store(JsonObject object, ExportLogger logger);
+	int store(ExistHelper existHelper, BiFunction<String, byte @Nullable [], String> extraWriter, JsonObject object, ExportLogger logger);
 	
-	@Override
-	default int store(ExistHelper existHelper, BiFunction<String, byte @Nullable [], String> writer, JsonObject object, ExportLogger logger) {
-		return store(object, logger);
-	}
 }

@@ -9,10 +9,10 @@ package cn.breadnicecat.reciperenderer.utils;
  *
  * <p>
  **/
-public class Timer {
+public class RTimer {
 	public long start;
 	
-	public Timer() {
+	public RTimer() {
 		reset();
 	}
 	

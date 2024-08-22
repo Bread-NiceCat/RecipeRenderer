@@ -1,5 +1,7 @@
 package cn.breadnicecat.reciperenderer.utils;
 
+import net.minecraft.util.profiling.InactiveProfiler;
+import net.minecraft.util.profiling.ProfilerFiller;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Scanner;
@@ -18,24 +20,52 @@ public class TaskChain {
 	Task cur, tail;
 	
 	public TaskChain() {
-		tail = new Task(() -> {
-		});
-		cur = tail;
+		cur = tail = new Break();
 	}
 	
 	public void run() {
-		while (cur.hasNext()) {
-			cur = cur.next;
-			cur.run();
+		run(InactiveProfiler.INSTANCE);
+	}
+	
+	public void run(ProfilerFiller profiler) {
+		profiler.push("run_TaskChain");
+		if (cur.hasNext()) {
+			profiler.push("wait_synchronized");
+			synchronized (this) {
+				profiler.pop();
+				tail = tail.bind(new Break());
+			}
+			while (cur.hasNext()) {
+				cur = cur.next;
+				if (cur instanceof Break) {
+					break;
+				}
+				cur.run();
+			}
+		}
+		profiler.pop();
+	}
+	
+	public boolean hasNext() {
+		return cur.hasNext();
+	}
+	
+	
+	private void add(Task task) {
+		synchronized (this) {
+			tail = tail.bind(task);
 		}
 	}
 	
 	public void add(Runnable runnable) {
-		tail = new Task(tail, runnable);
+		add(new Task(runnable));
 	}
 	
+	public void endFrame() {
+		add(new Break());
+	}
 	
-	private static class Task {
+	static class Task {
 		@Nullable
 		Task next;
 		final Runnable runnable;
@@ -44,9 +74,9 @@ public class TaskChain {
 			this.runnable = runnable;
 		}
 		
-		Task(Task prev, Runnable runnable) {
-			this(runnable);
-			prev.next = this;
+		Task bind(Task next) {
+			this.next = next;
+			return next;
 		}
 		
 		boolean hasNext() {
@@ -55,6 +85,16 @@ public class TaskChain {
 		
 		void run() {
 			runnable.run();
+		}
+	}
+	
+	static class Break extends Task {
+		Break() {
+			super(null);
+		}
+		
+		@Override
+		void run() {
 		}
 	}
 	
@@ -69,12 +109,18 @@ public class TaskChain {
 			System.out.print("> ");
 			String s = sc.nextLine();
 			if (!s.isEmpty()) {
+				if (s.equals("br")) {
+					tc.endFrame();
+				}
 				int o = ++ord;
 				tc.add(() -> System.out.println("pop " + o));
 				System.out.println("push " + o);
 			} else {
-				tc.run();
 				System.out.println("pop all");
+				while (tc.hasNext()) {
+					tc.run();
+					System.out.println("break;");
+				}
 			}
 		}
 	}

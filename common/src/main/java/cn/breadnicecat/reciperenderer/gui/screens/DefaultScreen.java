@@ -8,7 +8,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.Objects;
 
-import static cn.breadnicecat.reciperenderer.utils.CommonUtils.visit;
+import static cn.breadnicecat.reciperenderer.utils.CommonUtils.make;
 import static com.mojang.text2speech.Narrator.LOGGER;
 
 /**
@@ -24,7 +24,7 @@ public class DefaultScreen extends Screen {
 	private static final Dimension SIZE = new Dimension(200, 200);
 	
 	public static Image waitingImage, blackImage, whatImage, emmmImage, imageNow;
-	final Timer timer = new Timer(50, this::tick);
+	final Timer calmTimer = new Timer(50, this::tick);
 	/**
 	 * 黑化时长
 	 */
@@ -47,10 +47,18 @@ public class DefaultScreen extends Screen {
 	
 	private final JLabel label;
 	
+	@Override
+	public void repaint(Rectangle r) {
+		if (frame.freeTimer != null) {
+			frame.freeTimer.restart();
+		}
+		super.repaint(r);
+	}
+	
 	public DefaultScreen() {
 		this.label = new JLabel("/rr export modid");
 		label.setVerticalTextPosition(SwingConstants.CENTER);
-		visit(new MouseAdapter() {
+		make(new MouseAdapter() {
 			@Override
 			public void mouseClicked(MouseEvent e) {
 				int x = e.getX(), y = e.getY();
@@ -116,12 +124,12 @@ public class DefaultScreen extends Screen {
 	
 	@Override
 	public void onEnable() {
-		timer.start();
+		calmTimer.start();
 	}
 	
 	@Override
 	public void onDisable() {
-		timer.stop();
+		calmTimer.stop();
 	}
 	
 	

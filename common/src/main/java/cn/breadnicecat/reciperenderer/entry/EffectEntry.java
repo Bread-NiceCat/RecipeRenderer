@@ -19,7 +19,7 @@ import java.util.function.BiFunction;
  *
  * <p>
  **/
-public class EffectEntry implements Storable, Localizable {
+public class EffectEntry implements StorableV2, Localizable {
 	final MobEffect effect;
 	
 	public byte[] ico;
