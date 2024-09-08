@@ -35,13 +35,12 @@ public class TaskChain {
 				profiler.pop();
 				tail = tail.bind(new Break());
 			}
-			while (cur.hasNext()) {
+			do {
 				cur = cur.next;
 				if (cur instanceof Break) {
 					break;
-				}
-				cur.run();
-			}
+				} else cur.run();
+			} while (cur.hasNext());
 		}
 		profiler.pop();
 	}
@@ -95,6 +94,11 @@ public class TaskChain {
 		
 		@Override
 		void run() {
+		}
+		
+		@Override
+		Task bind(Task next) {
+			return next instanceof Break ? this : super.bind(next);
 		}
 	}
 	

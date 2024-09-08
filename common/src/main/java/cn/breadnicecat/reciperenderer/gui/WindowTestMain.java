@@ -1,6 +1,5 @@
 package cn.breadnicecat.reciperenderer.gui;
 
-import cn.breadnicecat.reciperenderer.WorldlyExporter;
 import cn.breadnicecat.reciperenderer.gui.screens.DefaultScreen;
 import cn.breadnicecat.reciperenderer.gui.screens.EntityViewScreen;
 import cn.breadnicecat.reciperenderer.gui.screens.Screen;
@@ -23,7 +22,7 @@ import java.awt.event.MouseEvent;
 public class WindowTestMain {
 	public static void main(String[] args) {
 		ExportFrame.debug = true;
-		ExportFrame exportFrame = new ExportFrame(3000);
+		ExportFrame exportFrame = new ExportFrame(5000);
 		exportFrame.setAlwaysOnTop(true);
 		JFrame cont = new JFrame();
 		cont.setTitle("控制器");
@@ -33,11 +32,11 @@ public class WindowTestMain {
 		simple.getView().imgData = new byte[1024];
 		
 		next.addMouseListener(new MouseAdapter() {
-			Screen[] sc = new Screen[]{exportFrame.defaultScreen, simple, new WorldlyProgressScreen(new WorldlyExporter(1000))};
-			int i = 1;
+			Screen[] sc = new Screen[]{exportFrame.defaultScreen, simple, new WorldlyProgressScreen(null)};
+			int i = 2;
 			
 			@Override
-			public void mouseReleased(MouseEvent e) {
+			public void mousePressed(MouseEvent e) {
 				if (i == sc.length) i = 0;
 				next.setText("next[" + i + "]");
 				exportFrame.setScreen(sc[i++]);

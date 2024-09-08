@@ -1,6 +1,5 @@
 package cn.breadnicecat.reciperenderer.render;
 
-import cn.breadnicecat.reciperenderer.Exporter;
 import cn.breadnicecat.reciperenderer.utils.ExportLogger;
 import cn.breadnicecat.reciperenderer.utils.PoseOffset;
 import com.mojang.serialization.DataResult;
@@ -11,6 +10,8 @@ import org.jetbrains.annotations.Nullable;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+
+import static cn.breadnicecat.reciperenderer.RecipeRenderer.LOGGER;
 
 /**
  * Created in 2024/7/25 上午2:10
@@ -32,29 +33,28 @@ public class IconWrapper {
 	}
 	
 	@Environment(EnvType.CLIENT)
-	public IIcon render(PoseOffset pose) {
+	public DataResult<IIcon> render(PoseOffset pose) {
 		try {
 			IIcon apply = factory.apply(pose);
 			if (apply != null) {
 				last = DataResult.success(apply);
-				return apply;
 			} else {
 				last = DataResult.error(() -> "未知渲染错误,wrapId" + wrapId);
 			}
 		} catch (Exception e) {
 			last = DataResult.error(() -> e + ",wrapId=" + wrapId);
 		}
-		return null;
+		return last;
 	}
 	
 	@Environment(EnvType.CLIENT)
-	public IIcon render() {
+	public DataResult<IIcon> render() {
 		return render(PoseOffset.NONE);
 	}
 	
 	public void clear() {
 		if (last != null) {
-			last.get().ifLeft(IIcon::close);
+			last.result().ifPresent(IIcon::close);
 			last = null;
 		}
 	}
@@ -69,11 +69,11 @@ public class IconWrapper {
 //			Thread.yield();
 			try {
 				Thread.sleep(100);
-				Exporter.current.logger.warnSilent("等待客户端响应...");
+				LOGGER.warn("等待客户端响应...");
 			} catch (InterruptedException ignored) {
 			}
 		}
-		return last.get().orThrow();
+		return last.getOrThrow();
 	}
 	
 	public byte[] getBytesBlocking() throws IOException {

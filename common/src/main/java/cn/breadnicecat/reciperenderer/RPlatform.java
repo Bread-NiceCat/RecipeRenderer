@@ -14,13 +14,13 @@ import java.util.stream.Stream;
 public interface RPlatform {
 	Stream<String> listMods();
 	
-	boolean isLoaded(String modid);
-	
 	RecipeRenderer.Platform getPlatform();
 	
 	String getVersion(String modid);
 	
 	String getLoaderVersion();
 	
-	String getName();
+	default String getName() {
+		return getPlatform().getName();
+	}
 }

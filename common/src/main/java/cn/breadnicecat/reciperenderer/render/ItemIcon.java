@@ -20,6 +20,7 @@ import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix4f;
+import org.joml.Matrix4fStack;
 
 
 /**
@@ -68,7 +69,6 @@ public class ItemIcon implements IIcon {
 		image.downloadTexture(0, false);
 		target.destroyBuffers();
 		image.flipY();
-		instance.getMainRenderTarget().bindWrite(true);
 		profiler.pop();
 	}
 	
@@ -87,22 +87,27 @@ public class ItemIcon implements IIcon {
 		RenderSystem.enableBlend();
 		RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
 		RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-		PoseStack poseStack = RenderSystem.getModelViewStack();
-		poseStack.pushPose();
+//		PoseStack poseStack = new PoseStack();
+		Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
+		modelViewStack.pushMatrix();
 		{
-			poseStack.setIdentity();
 			float mu = 16f / size;
-			poseStack.translate(8.0 + offset.x() * mu, 8.0 + offset.y() * mu, (model.isGui3d() ? 150 : 0) + offset.z() * mu);
-			poseStack.scale(16.0F * offset.scale(), -16.0F * offset.scale(), 16.0F * offset.scale());
+			modelViewStack.translate(8.0f + offset.x() * mu, 8.0f + offset.y() * mu, (model.isGui3d() ? 150 : 0) + offset.z() * mu);
+			modelViewStack.scale(16.0F * offset.scale(), -16.0F * offset.scale(), 16.0F * offset.scale());
 			RenderSystem.applyModelViewMatrix();
 			MultiBufferSource.BufferSource immediate = instance.renderBuffers().bufferSource();
-			Lighting.setupForFlatItems();
-			renderer.render(stack, ItemDisplayContext.GUI, false, new PoseStack(), immediate, 0xF000F0, OverlayTexture.NO_OVERLAY, model);
+			boolean flag = !model.usesBlockLight();
+			if (flag) {
+				Lighting.setupForFlatItems();
+			}
+			renderer.render(stack, ItemDisplayContext.GUI, false, new PoseStack(), immediate, 0xf000f0, OverlayTexture.NO_OVERLAY, model);
 			immediate.endBatch();
+			if (flag) {
+				Lighting.setupFor3DItems();
+			}
 			RenderSystem.enableDepthTest();
-			Lighting.setupFor3DItems();
 		}
-		poseStack.popPose();
+		modelViewStack.popMatrix();
 	}
 	
 }

@@ -1,6 +1,5 @@
 package cn.breadnicecat.reciperenderer.utils;
 
-import org.apache.logging.log4j.util.StackLocatorUtil;
 import org.jetbrains.annotations.Contract;
 
 import java.util.function.Consumer;
@@ -9,16 +8,18 @@ import java.util.function.Supplier;
 /**
  * @author <a href="https://gitee.com/Bread_NiceCat">Bread_NiceCat</a>
  * @date 2022/12/30 15:32
- * 非mc特有
  */
 public class CommonUtils {
 	
-	public static <T> T make(Supplier<T> t) {
-		return t.get();
+	public static void sleep(long ms) {
+		try {
+			Thread.sleep(ms);
+		} catch (InterruptedException ignored) {
+		}
 	}
 	
-	public static Class<?> getCaller() {
-		return StackLocatorUtil.getCallerClass(3);//因为要再调用getCaller(int)所以要+1
+	public static <T> T make(Supplier<T> t) {
+		return t.get();
 	}
 	
 	/**
@@ -39,13 +40,6 @@ public class CommonUtils {
 	}
 	
 	/**
-	 * @param depth 从深度1(此方法)开始,2调用这个方法的方法,3调用调用这个方法的方法...
-	 */
-	public static Class<?> getCaller(int depth) {
-		return StackLocatorUtil.getCallerClass(depth);
-	}
-	
-	/**
 	 * 依次让所有guest拜访house
 	 */
 	@SafeVarargs
@@ -56,16 +50,29 @@ public class CommonUtils {
 	}
 	
 	@SafeVarargs
-	public static <I> I make(I visitor, Consumer<I>... house) {
+	public static <I> I visit(I visitor, Consumer<I>... house) {
 		for (Consumer<I> h : house) {
 			h.accept(visitor);
 		}
 		return visitor;
 	}
 	
+	public static <I> I make(I visitor, Consumer<I> house) {
+		house.accept(visitor);
+		return visitor;
+	}
+	
 	@Contract()//把->fail顶掉
 	public static <T> T impossibleCode() {
 		throw new AssertionError("Impossible code invoked. It's a bug, please report it to us");
+	}
+	
+	public static <T> T TODO(String st) {
+		throw new AssertionError(st);
+	}
+	
+	public static <T> T TODO() {
+		return impossibleCode();
 	}
 	
 	public static <T> T orElse(T value, T defaultValue) {

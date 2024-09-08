@@ -5,7 +5,7 @@ jobs:
   build:
     strategy:
       matrix:
-        java: [ 17 ]
+        java: [ 21 ]
         os: [ windows-latest ]
 
     runs-on: ${{ matrix.os }}
@@ -27,13 +27,13 @@ jobs:
       - name: upload forge
         uses: actions/upload-artifact@v4
         with:
-          name: forge
-          path: forge/build/libs/reciperenderer-*.*.*[0-9].jar
+          name: neoforge
+          path: neoforge/build/libs/*[0-9].jar
           if-no-files-found: error
 
       - name: upload fabric
         uses: actions/upload-artifact@v4
         with:
           name: fabric
-          path: fabric/build/libs/reciperenderer-*.*.*[0-9].jar
+          path: fabric/build/libs/*[0-9].jar
           if-no-files-found: error

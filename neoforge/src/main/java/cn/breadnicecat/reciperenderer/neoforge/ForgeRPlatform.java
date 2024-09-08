@@ -1,10 +1,10 @@
-package cn.breadnicecat.reciperenderer.forge;
+package cn.breadnicecat.reciperenderer.neoforge;
 
 import cn.breadnicecat.reciperenderer.RPlatform;
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
-import net.minecraftforge.fml.ModList;
-import net.minecraftforge.forgespi.language.IModInfo;
-import net.minecraftforge.versions.forge.ForgeVersion;
+import net.neoforged.fml.ModList;
+import net.neoforged.neoforge.internal.versions.neoforge.NeoForgeVersion;
+import net.neoforged.neoforgespi.language.IModInfo;
 
 import java.util.stream.Stream;
 
@@ -24,28 +24,17 @@ public class ForgeRPlatform implements RPlatform {
 	}
 	
 	@Override
-	public boolean isLoaded(String modid) {
-		return ModList.get().isLoaded(modid);
-	}
-	
-	@Override
 	public String getVersion(String modid) {
 		return ModList.get().getModFileById(modid).versionString();
 	}
 	
 	@Override
 	public String getLoaderVersion() {
-		return ForgeVersion.getVersion();
+		return NeoForgeVersion.getVersion();
 	}
-	
-	@Override
-	public String getName() {
-		return "Forge";
-	}
-	
 	
 	@Override
 	public RecipeRenderer.Platform getPlatform() {
-		return RecipeRenderer.Platform.FORGE;
+		return RecipeRenderer.Platform.NEOFORGE;
 	}
 }

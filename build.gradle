@@ -1,6 +1,8 @@
 plugins {
-    id "architectury-plugin" version "3.4-SNAPSHOT"
-    id "dev.architectury.loom" version "1.5-SNAPSHOT" apply false
+    id 'java'
+    id 'dev.architectury.loom' version '1.7-SNAPSHOT' apply false
+    id 'architectury-plugin' version '3.4-SNAPSHOT'
+    id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
 }
 
 architectury {
@@ -14,7 +16,7 @@ allprojects {
 
     version = mod_version
     group = maven_group
-    archivesBaseName = archives_base_name
+    archivesBaseName = "$archives_name-$minecraft_version"
 
     repositories {
         if (Locale.getDefault() == Locale.CHINA) {
@@ -53,7 +55,6 @@ allprojects {
 
     tasks.withType(JavaCompile).configureEach {
         options.encoding = "UTF-8"
-        options.release = 17
     }
 
     java {
@@ -67,7 +68,6 @@ allprojects {
     }
 }
 subprojects {
-
     apply plugin: "dev.architectury.loom"
     dependencies {
         minecraft "com.mojang:minecraft:${minecraft_version}"

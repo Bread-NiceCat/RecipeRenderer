@@ -1,7 +1,7 @@
 modLoader = "javafml"
-loaderVersion = "[0,)"
+loaderVersion = "[1,)"
 issueTrackerURL = "https://github.com/Bread-Nicecat/RecipeRenderer/issues"
-license = "GNU GPL v3"
+license = "GNU GPL 3.0"
 
 [[mods]]
 modId = "reciperenderer"
@@ -11,3 +11,6 @@ authors = "Bread_NiceCat"
 credits = "mcmod, Architectury-Loom"
 description = '''
 '''
+[[mixins]]
+config = "reciperenderer-common.mixins.json"
+

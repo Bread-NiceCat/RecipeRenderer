@@ -24,14 +24,21 @@ public class RTimer {
 		return (ms() - start);
 	}
 	
-	public String getString() {
+	public String getStringMs() {
 		return get() + "ms";
 	}
 	
-	public String getStringAndReset() {
-		String s = get() + "ms";
-		reset();
-		return s;
+	public String getStringSecond() {
+		return get() / 1000 + "s";
+	}
+	
+	private String getStringMinuteSecond() {
+		long l = get() / 1000;
+		return l / 60 + "min" + l % 60 + "s";
+	}
+	
+	public String getString() {
+		return get() < 1000 ? getStringMs() : (get() > 60 * 1000 ? getStringMinuteSecond() : getStringSecond());
 	}
 	
 	private long ms() {
@@ -40,6 +47,6 @@ public class RTimer {
 	
 	@Override
 	public String toString() {
-		return getString();
+		return getStringMs();
 	}
 }

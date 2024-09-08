@@ -6,8 +6,7 @@ import cn.breadnicecat.reciperenderer.utils.ExistHelper;
 import cn.breadnicecat.reciperenderer.utils.ExportLogger;
 import cn.breadnicecat.reciperenderer.utils.ItemState;
 import com.google.gson.JsonObject;
-import com.mojang.serialization.JsonOps;
-import net.minecraft.nbt.CompoundTag;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.CreativeModeTab;
@@ -37,7 +36,7 @@ public class ItemEntry implements LocalizableV2, StorableV2, Closeable {
 	public String[] tags;
 	public String en;
 	public String zh;
-	public CompoundTag nbt;
+	//	public CompoundTag nbt;
 	public IconWrapper ico32;
 	public IconWrapper ico128;
 	//
@@ -55,13 +54,15 @@ public class ItemEntry implements LocalizableV2, StorableV2, Closeable {
 		stackSize = stack.getMaxStackSize();
 		durability = stack.getMaxDamage();
 		tags = stack.getTags().map(i -> i.location().toString()).toArray(String[]::new);
-		nbt = stack.hasTag() ? state.stack.getTag() : new CompoundTag();
-		FoodProperties properties = stack.getItem().getFoodProperties();
+		FoodProperties properties = stack.get(DataComponents.FOOD);
+//		for (TypedDataComponent<?> types : stack.getComponents()) {
+//			Object v = types.value();//v无法序列化
+//			DataComponentType<?> type = types.type();
+//		}
 		if (properties != null) {
 			//nutrition 饱食度
-			//saturation 饱和度 # 饱和度=2*饱食度*饱和度修饰符,这里已经进行转化
-			nutrition = properties.getNutrition();
-			saturation = 2 * nutrition * properties.getSaturationModifier();
+			nutrition = properties.nutrition();
+			saturation = properties.saturation();
 		}
 	}
 	
@@ -85,12 +86,12 @@ public class ItemEntry implements LocalizableV2, StorableV2, Closeable {
 		object.addProperty("tags", Arrays.toString(tags));
 		object.addProperty("stackSize", stackSize);
 		object.addProperty("durability", durability);
-		object.addProperty("nbt", CompoundTag.CODEC.encodeStart(JsonOps.INSTANCE, nbt).get().orThrow().toString());
+//		object.addProperty("nbt", CompoundTag.CODEC.encodeStart(JsonOps.INSTANCE, nbt).get().orThrow().toString());
 		object.addProperty("nut", nutrition);
 		object.addProperty("sat", saturation);
 		object.addProperty("ico32", writer.apply(existHelper.getModified("attachment/ico32/" + id.getPath() + ".png"), ico32.getBytesBlocking(logger)));
 		object.addProperty("ico128", writer.apply(existHelper.getModified("attachment/ico128/" + id.getPath() + ".png"), ico128.getBytesBlocking(logger)));
-		return 3;
+		return 4;
 	}
 	
 	@Override

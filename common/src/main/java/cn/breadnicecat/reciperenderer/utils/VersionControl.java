@@ -37,8 +37,10 @@ public class VersionControl {
 			String sub1 = mcVersion.substring(0, mcVersion.lastIndexOf('.'));
 			ver = properties.getProperty("mod_version_" + sub1);
 			if (ver == null) {
-				String sub2 = sub1.substring(0, sub1.lastIndexOf('.'));
-				ver = properties.getProperty("mod_version_" + sub2);
+				if (sub1.contains(".")) {
+					String sub2 = sub1.substring(0, sub1.lastIndexOf('.'));
+					ver = properties.getProperty("mod_version_" + sub2);
+				}
 			}
 		}
 		while (ver != null && ver.startsWith("$")) {

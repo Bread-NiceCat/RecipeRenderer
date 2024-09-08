@@ -18,6 +18,7 @@ import net.minecraft.commands.arguments.selector.EntitySelector;
 import net.minecraft.commands.synchronization.SuggestionProviders;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
@@ -43,14 +44,16 @@ public class RCommand {
 		EntityViewScreen scn = EntityViewScreen.SIMPLE;
 		Minecraft instance = Minecraft.getInstance();
 		var worldly = literal("worldly")
-				.then(literal("collect")
-						.then(literal("fixed")
-								.then(argument("scan_count", IntegerArgumentType.integer()).executes(c -> {
-									RecipeRenderer.worldlyExportFixed(20000);
+				.then(
+						(literal("fixed")
+								.then(argument("scan_count", IntegerArgumentType.integer(1)).executes(c -> {
+									ServerLevel level = c.getSource().getPlayerOrException().serverLevel();
+									RecipeRenderer.worldlyExportFixed(level, IntegerArgumentType.getInteger(c, "scan_count"));
 									return 1;
 								}))
 								.executes(c -> {
-									RecipeRenderer.worldlyExportFixed(IntegerArgumentType.getInteger(c, "scan_count"));
+									ServerLevel level = c.getSource().getPlayerOrException().serverLevel();
+									RecipeRenderer.worldlyExportFixed(level, 10000);
 									return 1;
 								}))
 				);
@@ -124,16 +127,16 @@ public class RCommand {
 				}
 				try {
 					export(modid);
-				} catch (Exception e) {
+				} catch (RuntimeException e) {
 					c.getSource().sendFailure(Component.literal(e.getMessage()));
-					throw new RuntimeException(e);
+					throw e;
 				}
 				return 1;
 			}));
 		}
 		//=================================
 		var open = literal("open")
-				.then(literal("worldly").executes((c) -> open(Exporter.WORLDLY)))
+				.then(literal("worldly").executes((c) -> open(WorldlyExporter.OUTPUT_DIR)))
 				.executes((c) -> open(Exporter.ROOT_DIR));
 		for (String modid : allMods.keySet()) {
 			open.then(literal(modid).executes(c -> open(new File(Exporter.ROOT_DIR, modid))));

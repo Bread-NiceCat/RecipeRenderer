@@ -24,13 +24,12 @@ public class ItemState {
 	public final boolean equals(Object o) {
 		if (this == o) return true;
 		if (!(o instanceof ItemState itemState)) return false;
-		return ItemStack.isSameItemSameTags(stack, itemState.stack);
+		return ItemStack.isSameItemSameComponents(stack, itemState.stack);
 	}
 	
 	@Override
 	public int hashCode() {
 		if (stack.isEmpty()) return 0;
-		if (!stack.hasTag()) return stack.getItem().hashCode();
-		return Objects.hash(stack.getItem(), stack.getOrCreateTag());
+		return Objects.hash(stack.getItem(), stack.getComponents().hashCode());
 	}
 }

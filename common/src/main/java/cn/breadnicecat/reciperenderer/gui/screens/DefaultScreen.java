@@ -8,7 +8,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.Objects;
 
-import static cn.breadnicecat.reciperenderer.utils.CommonUtils.make;
+import static cn.breadnicecat.reciperenderer.utils.CommonUtils.visit;
 import static com.mojang.text2speech.Narrator.LOGGER;
 
 /**
@@ -58,7 +58,7 @@ public class DefaultScreen extends Screen {
 	public DefaultScreen() {
 		this.label = new JLabel("/rr export modid");
 		label.setVerticalTextPosition(SwingConstants.CENTER);
-		make(new MouseAdapter() {
+		visit(new MouseAdapter() {
 			@Override
 			public void mouseClicked(MouseEvent e) {
 				int x = e.getX(), y = e.getY();

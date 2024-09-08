@@ -2,6 +2,7 @@ package cn.breadnicecat.reciperenderer;
 
 import cn.breadnicecat.reciperenderer.gui.ExportFrame;
 import cn.breadnicecat.reciperenderer.gui.screens.WorldlyProgressScreen;
+import cn.breadnicecat.reciperenderer.utils.ExportLogger;
 import cn.breadnicecat.reciperenderer.utils.RTimer;
 import cn.breadnicecat.reciperenderer.utils.TaskChain;
 import com.google.gson.Gson;
@@ -14,15 +15,17 @@ import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.profiling.ProfilerFiller;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.File;
 import java.net.URL;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static cn.breadnicecat.reciperenderer.utils.VersionControl.getLatestVersion;
 
@@ -35,24 +38,46 @@ import static cn.breadnicecat.reciperenderer.utils.VersionControl.getLatestVersi
  *
  * <p>
  **/
+@Environment(EnvType.CLIENT)
 public class RecipeRenderer {
 	public static final String MOD_ID = "reciperenderer";
 	public static final String MOD_NAME = "Recipe Renderer";
 	public static final String UPDATE_URL = "https://gitee.com/Bread-NiceCat/RecipeRenderer/raw/master/gradle.properties";
+	
+	public static final boolean DEV;
+	
+	static {
+		//检查是否处于Dev环境
+		boolean inDev = false;
+		try {
+			inDev = new File(new File("").getAbsoluteFile().getParentFile(), "src").exists();
+		} catch (Exception ignored) {
+		} finally {
+			DEV = inDev;
+		}
+	}
+	
 	public static final Logger LOGGER = LogManager.getLogger(MOD_NAME);
+	public static final ExportLogger PLAYER_LOGGER = new ExportLogger(LOGGER);
+	
 	public static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
-	public static final Base64.Encoder BASE64 = Base64.getEncoder();
+	public static final Gson PRETTY = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+	
+	public static final ExecutorService EXECUTOR = Executors.newWorkStealingPool();
 	
 	private static ExportFrame exportFrame;
+	
 	public static RPlatform platform;
+	
 	public static String modVersion = null;
 	public static String mcVersion = DetectedVersion.BUILT_IN.getName();
-	static boolean outdated = false;
-	public static String latestVer;
 	/**
 	 * modid : modVersion
 	 */
 	public static final Map<String, String> allMods = new HashMap<>();
+	
+	static boolean outdated = false;
+	public static String latestVer;
 	
 	public static String getVersion(String modid) {
 		return allMods.get(modid);
@@ -70,7 +95,6 @@ public class RecipeRenderer {
 		return exportFrame != null ? exportFrame : launchWindow();
 	}
 	
-	@Environment(EnvType.CLIENT)
 	public static void init(RPlatform rr) {
 		RecipeRenderer.platform = rr;
 		LOGGER.info("开始加载 {}!", MOD_NAME);
@@ -82,7 +106,7 @@ public class RecipeRenderer {
 			LOGGER.error("获取Mod实例时出现异常", e);
 		}
 		
-		Exporter.executor.submit(() -> {
+		EXECUTOR.submit(() -> {
 			LOGGER.info("设置headless=false");
 			System.setProperty("java.awt.headless", "false");
 			//先初始化
@@ -90,7 +114,7 @@ public class RecipeRenderer {
 		});
 		
 		
-		Exporter.executor.submit(() -> {
+		EXECUTOR.submit(() -> {
 			try {
 				latestVer = getLatestVersion(new URL(UPDATE_URL));
 				LOGGER.info("当前版本: {}", modVersion);
@@ -110,11 +134,9 @@ public class RecipeRenderer {
 	}
 	
 	//head -> tail
-	@Environment(EnvType.CLIENT)
 	private static TaskChain tasks = new TaskChain();
 	
-	@Environment(EnvType.CLIENT)
-	public static void _onClientTick() {
+	public static void _onFrameUpdate() {
 		ProfilerFiller profiler = Minecraft.getInstance().getProfiler();
 		profiler.push("rr_onClientTick");
 		tasks.run(profiler);
@@ -139,11 +161,23 @@ public class RecipeRenderer {
 		}
 	}
 	
-	public static void worldlyExportFixed(int scanCount) {
-		exportFrame.setScreen(new WorldlyProgressScreen(new WorldlyExporter(scanCount)));
+	public static void worldlyExportFixed(ServerLevel level, int scanCount) {
+		ExportFrame window = getWindow();
+		if (window.isScreenLocked()) throw new RuntimeException("当前导出屏幕已锁定");
+		window.setScreen(new WorldlyProgressScreen(new WorldlyExporter(level, scanCount)));
 	}
 	
 	public enum Platform {
-		FORGE, FABRIC
+		NEOFORGE("NeoForge"), FABRIC("Fabric");
+		
+		private final String name;
+		
+		Platform(String name) {
+			this.name = name;
+		}
+		
+		public String getName() {
+			return name;
+		}
 	}
 }

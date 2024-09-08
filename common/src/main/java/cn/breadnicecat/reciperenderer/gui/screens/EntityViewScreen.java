@@ -72,7 +72,7 @@ public class EntityViewScreen extends Screen {
 	});
 	private final JToggleButton record = make(new JToggleButton(" 录制 "), t -> {
 		t.addActionListener(new ActionListener() {
-			boolean alwOri;
+			boolean alwaysRenderOri;
 			int r = 255, mu = -1;
 			Timer colorTimer = new Timer(15, (e) -> {
 				r += 5 * mu;
@@ -84,6 +84,7 @@ public class EntityViewScreen extends Screen {
 			public void actionPerformed(ActionEvent e) {
 				if (t.isSelected()) {
 					gifLever = true;
+					frame.setScreenLocked(true);
 					t.setForeground(Color.RED);
 					view.setBorder(BorderFactory.createLineBorder(Color.RED, 2));
 					gifFrames.setVisible(true);
@@ -92,12 +93,13 @@ public class EntityViewScreen extends Screen {
 					r = 255;
 					mu = -1;
 					colorTimer.start();
-					alwOri = renderAlways.isSelected();
+					alwaysRenderOri = renderAlways.isSelected();
 					renderAlways.setSelected(true);
 					renderAlways.setEnabled(false);
 				} else {
 					gifLever = false;
-					renderAlways.setSelected(alwOri);
+					frame.setScreenLocked(false);
+					renderAlways.setSelected(alwaysRenderOri);
 					renderAlways.setEnabled(true);
 					view.gifEncodedCnt = view.gifFrameCnt = 0;
 					colorTimer.stop();
@@ -407,7 +409,7 @@ public class EntityViewScreen extends Screen {
 						if (fps <= fpsUpper) {
 							fpsAvg = fpsAvg == 0 ? fps : (fps + 4 * fpsAvg) / 5f;
 							curIco.clear();
-							IIcon icon = curIco.render(o);
+							IIcon icon = curIco.render(o).getOrThrow();
 							if (gifLever) {
 								setGifFrames(++gifFrameCnt);
 							}

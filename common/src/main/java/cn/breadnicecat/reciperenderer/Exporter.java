@@ -1,12 +1,11 @@
 package cn.breadnicecat.reciperenderer;
 
 import cn.breadnicecat.reciperenderer.entry.*;
+import cn.breadnicecat.reciperenderer.gui.ExportFrame;
 import cn.breadnicecat.reciperenderer.render.IconWrapper;
 import cn.breadnicecat.reciperenderer.utils.*;
 import com.google.gson.JsonObject;
 import com.mojang.datafixers.util.Pair;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.language.ClientLanguage;
 import net.minecraft.client.server.IntegratedServer;
@@ -28,14 +27,13 @@ import org.jetbrains.annotations.Nullable;
 import java.io.*;
 import java.rmi.RemoteException;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import static cn.breadnicecat.reciperenderer.RecipeRenderer.*;
+import static cn.breadnicecat.reciperenderer.mixin.MixinCreativeModeTabs.*;
 import static cn.breadnicecat.reciperenderer.utils.CommonUtils.byId;
 
 /**
@@ -47,14 +45,13 @@ import static cn.breadnicecat.reciperenderer.utils.CommonUtils.byId;
  *
  * <p>
  **/
-@Environment(EnvType.CLIENT)
 public class Exporter {
-	public static final ExecutorService executor = Executors.newWorkStealingPool();
-	public final AtomicBoolean validator = new AtomicBoolean(true);
+	private final AtomicBoolean validator = new AtomicBoolean(true);
+	
+	static Minecraft instance = Minecraft.getInstance();
 	
 	public static Exporter current;
-	static Minecraft instance = Minecraft.getInstance();
-	public static File ROOT_DIR = new File(instance.gameDirectory, "rr_export/");
+	public static File ROOT_DIR = new File(ExportFrame.debug ? new File("build") : instance.gameDirectory, "rr_export");
 	public static File WORLDLY = new File(ROOT_DIR, "worldly");
 	
 	final String modid;
@@ -68,13 +65,6 @@ public class Exporter {
 	 * $root/output.zip
 	 */
 	final File outputfile;
-	
-	/**
-	 * $root/logout.zip
-	 */
-	final File logoutfile;
-	
-	public ExportLogger logger;
 	
 	List<ItemEntry> items = new LinkedList<>();
 	List<EntityEntry> entities = new LinkedList<>();
@@ -92,15 +82,13 @@ public class Exporter {
 		
 		this.modRoot = new File(ROOT_DIR, modid);
 		this.outputfile = new File(modRoot, "output.zip");
-		this.logoutfile = new File(modRoot, "logout.log.gz");
 	}
 	
 	public void runAsync() {
 		if (current != null) throw new RuntimeException("已经有一个程序在导出了");
 		current = this;
-		logger = new ExportLogger(LOGGER);
-		executor.submit(this::run);
-		logger.info("异步导出任务创建完成");
+		EXECUTOR.submit(this::run);
+		PLAYER_LOGGER.info("异步导出任务创建完成");
 	}
 	
 	private void run() {
@@ -108,29 +96,47 @@ public class Exporter {
 			throw new RuntimeException("重复使用的Exporter");
 		}
 		this.startTime = new RTimer();
-		logger.info("开始初始化");
+		PLAYER_LOGGER.info("开始初始化");
 		modRoot.mkdirs();
 		try (var outputs_z = new ZipOutputStream(new FileOutputStream(outputfile))) {
 			outputs_z.setLevel(9);
 			outputs_z.setComment("Exported by " + MOD_NAME + " v" + modVersion
 					+ ", \nTargetMod " + modid + "@" + getVersion(modid)
 					+ ", \nEnvironment Minecraft@" + mcVersion + "+" + platform.getName() + "@" + platform.getLoaderVersion());
-			logger.info("开始导出" + modid);
+			PLAYER_LOGGER.info("开始导出" + modid);
 			
-			logger.info("开始收集条目");
-			collects();
+			PLAYER_LOGGER.info("开始收集条目");
 			
-			logger.info("向客户端发送渲染任务");
-			render();
+			tryRun("导出物品时遇到致命错误", this::_collectItem, items::clear);
+			tryRun("导出实体时遇到致命错误", this::_collectEntity, entities::clear);
+			tryRun("导出配方时遇到致命错误", this::_collectRecipe, () -> {
+				recipes.clear();
+				recipeTypes.clear();
+			});
+			tryRun("导出时药水效果时遇到致命错误", this::_collectEffect, effects::clear);
+			tryRun("导出附魔时遇到致命错误", this::_collectEnchant, enchantments::clear);
+			tryRun("导出生物群系时遇到致命错误", this::_collectBiome, biomes::clear);
+			tryRun("导出维度时遇到致命错误", this::_collectDim, dimensions::clear);
+			_collectLang();
 			
-			logger.info("开始写入数据");
+			PLAYER_LOGGER.info("向客户端发送渲染任务");
+			items.forEach(i -> {
+				scheduleRender(i.id.getPath() + "_ico32", i.ico32);
+				scheduleRender(i.id.getPath() + "_ico128", i.ico128);
+			});
+			entities.forEach(i -> {
+				scheduleRender(i.id.getPath() + "_ico32", i.ico32);
+				scheduleRender(i.id.getPath() + "_ico128", i.ico128);
+			});
+			
+			PLAYER_LOGGER.info("开始写入数据");
 			if (tryRun("写入数据时发生致命错误", () -> write(outputs_z), null)) return;
 			
-			logger.info("导出完成,共耗时" + startTime.getString());
+			PLAYER_LOGGER.info("导出完成,共耗时" + startTime.getStringMs());
 			open(modRoot);
 		} catch (Throwable e) {
 			validator.set(false);
-			reportError("遭遇致命错误", e);
+			LOGGER.error("遭遇致命错误", e);
 			throw new RuntimeException(e.getMessage(), e);
 		} finally {
 			current = null;
@@ -140,59 +146,33 @@ public class Exporter {
 	
 	//========================================
 	
-	public void collects() {
-		tryRun("导出物品时遇到致命错误", this::_collectItem, items::clear);
-		tryRun("导出实体时遇到致命错误", this::_collectEntity, entities::clear);
-		tryRun("导出配方时遇到致命错误", this::_collectRecipe, () -> {
-			recipes.clear();
-			recipeTypes.clear();
-		});
-		tryRun("导出时药水效果时遇到致命错误", this::_collectEffect, effects::clear);
-		tryRun("导出附魔时遇到致命错误", this::_collectEnchant, enchantments::clear);
-		tryRun("导出生物群系时遇到致命错误", this::_collectBiome, biomes::clear);
-		tryRun("导出维度时遇到致命错误", this::_collectDim, dimensions::clear);
-		_collectLang();
-	}
-	
-	public void render() {
-		items.forEach(i -> {
-			scheduleRender(i.id.getPath() + "_ico32", i.ico32);
-			scheduleRender(i.id.getPath() + "_ico128", i.ico128);
-		});
-		entities.forEach(i -> {
-			scheduleRender(i.id.getPath() + "_ico32", i.ico32);
-			scheduleRender(i.id.getPath() + "_ico128", i.ico128);
-		});
-	}
-	
-	
 	private void write(ZipOutputStream output) throws IOException {
 		StringJoiner joiner = new StringJoiner(", ", "共导出", ".");
 		if (!effects.isEmpty()) {
 			joiner.add(effects.size() + "个药水效果");
-			logger.info("写入药水效果");
+			PLAYER_LOGGER.info("写入药水效果");
 			write("effect", output, "effect.jsons", effects);
 		}
 		if (!enchantments.isEmpty()) {
 			joiner.add(enchantments.size() + "个附魔");
-			logger.info("写入附魔");
+			PLAYER_LOGGER.info("写入附魔");
 			write("enchantment", output, "enchantment.jsons", enchantments);
 		}
 		if (!dimensions.isEmpty()) {
 			joiner.add(dimensions.size() + "个维度");
-			logger.info("写入维度");
+			PLAYER_LOGGER.info("写入维度");
 			write("dimension", output, "dimension.jsons", dimensions);
 		}
 		if (!biomes.isEmpty()) {
 			joiner.add(biomes.size() + "个群系");
-			logger.info("写入生物群系");
+			PLAYER_LOGGER.info("写入生物群系");
 			write("biome", output, "biome.jsons", biomes);
 		}
 		if (!recipes.isEmpty()) {
 			joiner.add(recipes.size() + "个配方(涉及" + recipeTypes.size() + "种类型)");
-			logger.info("写入配方");
+			PLAYER_LOGGER.info("写入配方");
 			writeJson(output, "recipe.jsons", recipes, null);
-			logger.info("反编译配方序列化类");
+			PLAYER_LOGGER.info("反编译配方序列化类");
 			HashMap<Class<?>, byte[]> cache = new HashMap<>();
 			for (Map.Entry<String, Class<?>> entry : recipeTypes.entrySet()) {
 				String k = entry.getKey();
@@ -201,16 +181,16 @@ public class Exporter {
 					Class<?> clz = entry.getValue();
 					byte[] bytes = cache.get(clz);
 					if (bytes == null) {
-						logger.infoSilent("decompiling...");
+						LOGGER.info("decompiling...");
 						bytes = FernFlowerUtils.decompile(clz).getBytes();
 						cache.put(clz, bytes);
 					} else {
-						logger.infoSilent("decompile SKIPPED");
+						LOGGER.info("decompile SKIP");
 					}
-					logger.infoSilent("decompiled " + clz.getName());
+					LOGGER.info("decompiled {}", clz.getName());
 					output.write(bytes);
 				} catch (Throwable e) {
-					reportError("反编译" + k + "失败", e);
+					LOGGER.error("反编译" + k + "失败", e);
 				} finally {
 					output.closeEntry();
 				}
@@ -220,16 +200,16 @@ public class Exporter {
 		
 		if (!items.isEmpty()) {
 			joiner.add(items.size() + "个物品");
-			logger.info("写入物品");
+			PLAYER_LOGGER.info("写入物品");
 			write("item", output, "item.jsons", items);
 		}
 		
 		if (!entities.isEmpty()) {
 			joiner.add(entities.size() + "个实体");
-			logger.info("写入实体");
+			PLAYER_LOGGER.info("写入实体");
 			write("entity", output, "entity.jsons", entities);
 		}
-		logger.info(joiner.toString());
+		PLAYER_LOGGER.info(joiner.toString());
 	}
 	
 	
@@ -237,29 +217,29 @@ public class Exporter {
 	private void scheduleRender(@Nullable String name, IconWrapper ico) {
 		RecipeRenderer.hookRenderer(() -> {
 			if (validator.get()) {
-				if (name != null) logger.infoSilent("开始渲染：" + name + ",wrapId=" + ico.wrapId);
+				if (name != null) LOGGER.info("开始渲染：{},wrapId={}", name, ico.wrapId);
 				try {
 					instance.getProfiler().push("Render Exporter Icon");
 					ico.render();
 					instance.getProfiler().pop();
 				} catch (Exception e) {
-					reportError(name + "渲染失败,wrapId=" + ico.wrapId, e);
+					LOGGER.error(name + "渲染失败,wrapId=" + ico.wrapId, e);
 				}
 			} else {
-				logger.warnSilent("渲染失败:无效的会话,wrapId=" + ico.wrapId);
+				LOGGER.warn("渲染失败:无效的会话,wrapId={}", ico.wrapId);
 			}
 		});
 	}
 	
 	private void _collectItem() {
-		logger.info("开始收集物品");
+		PLAYER_LOGGER.info("开始收集物品");
 		CreativeModeTabs.tryRebuildTabContents(FeatureFlags.REGISTRY.allFlags(), true, instance.level.registryAccess());
 		HashMap<ItemState, ItemEntry> holders = new HashMap<>();
 		CreativeModeTabs.allTabs().stream()
 				.map(t -> Pair.of(BuiltInRegistries.CREATIVE_MODE_TAB.getResourceKey(t).orElse(null), t))
 				.filter(key -> {
 					ResourceKey<CreativeModeTab> id = key.getFirst();
-					return id != null && id != CreativeModeTabs.SEARCH && id != CreativeModeTabs.INVENTORY;
+					return id != null && id != getHOTBAR() && id != getSEARCH() && id != getINVENTORY();
 				})
 				.forEach(tabs -> tabs.getSecond().getDisplayItems().stream()
 						.map(i -> Pair.of(BuiltInRegistries.ITEM.getKey(i.getItem()), new ItemState(i)))
@@ -267,7 +247,7 @@ public class Exporter {
 						.forEach(i -> {
 							ResourceLocation location = i.getFirst();
 							holders.computeIfAbsent(i.getSecond(), (state) -> {
-								logger.infoSilent(location.toString());
+								LOGGER.info(location.toString());
 								ItemEntry e = new ItemEntry(location, state);
 								items.add(e);
 								return e;
@@ -286,12 +266,12 @@ public class Exporter {
 	}
 	
 	private void _collectEntity() {
-		logger.info("开始获取实体");
+		PLAYER_LOGGER.info("开始获取实体");
 		BuiltInRegistries.ENTITY_TYPE.entrySet().stream()
 				.filter(i -> i.getKey().location().getNamespace().equals(modid))
 				.forEach(i -> {
 					ResourceLocation location = i.getKey().location();
-					logger.infoSilent(location.toString());
+					LOGGER.info(location.toString());
 					Entity entity = i.getValue().create(instance.level);
 					if (entity instanceof Mob mob) {
 						EntityEntry entry = new EntityEntry(location, mob);
@@ -302,7 +282,7 @@ public class Exporter {
 	}
 	
 	private void _collectLang() {
-		logger.info("开始解析语言");
+		PLAYER_LOGGER.info("开始解析语言");
 		ClientLanguage zh = ClientLanguage.loadFrom(instance.getResourceManager(), List.of("en_us", "zh_cn"), false);
 		ClientLanguage en = ClientLanguage.loadFrom(instance.getResourceManager(), List.of("en_us"), false);
 		Language rawl = Language.getInstance();
@@ -320,39 +300,39 @@ public class Exporter {
 	}
 	
 	private void _collectRecipe() throws IOException {
-		logger.info("开始获取配方");
+		PLAYER_LOGGER.info("开始获取配方");
 		ResourceManager data = Objects.requireNonNull(instance.getSingleplayerServer()).getResourceManager();
 		Map<ResourceLocation, Resource> listed = data.listResources("recipes",
 				t -> t.getNamespace().equals(modid) && t.getPath().endsWith(".json"));
 		for (Map.Entry<ResourceLocation, Resource> value : listed.entrySet()) {
-			logger.infoSilent(value.getKey().toString());
+			LOGGER.info(value.getKey().toString());
 			Resource resource = value.getValue();
 			JsonObject json = GSON.fromJson(resource.openAsReader(), JsonObject.class);
 			String type = json.get("type").getAsString();
-			recipeTypes.put(type, BuiltInRegistries.RECIPE_SERIALIZER.get(new ResourceLocation(type)).getClass());
+			recipeTypes.put(type, BuiltInRegistries.RECIPE_SERIALIZER.get(ResourceLocation.parse(type)).getClass());
 			recipes.add(json);
 		}
 	}
 	
 	private void _collectEnchant() {
-		logger.info("开始获取附魔");
-		BuiltInRegistries.ENCHANTMENT.entrySet().stream()
+		PLAYER_LOGGER.info("开始获取附魔");
+		instance.level.registryAccess().registryOrThrow(Registries.ENCHANTMENT).entrySet().stream()
 				.filter(i -> i.getKey().location().getNamespace().equals(modid))
 				.forEach(i -> {
 					ResourceLocation location = i.getKey().location();
-					logger.infoSilent(location.toString());
+					LOGGER.info(location.toString());
 					enchantments.add(new EnchantEntry(location, i.getValue()));
 				});
 	}
 	
 	private void _collectDim() {
 		IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
-		logger.info("开始获取维度");
+		PLAYER_LOGGER.info("开始获取维度");
 		server.registryAccess().registry(Registries.DIMENSION_TYPE).orElseThrow().entrySet().stream()
 				.filter(i -> i.getKey().location().getNamespace().equals(modid))
 				.forEach(i -> {
 					ResourceLocation location = i.getKey().location();
-					logger.infoSilent(location.toString());
+					LOGGER.info(location.toString());
 					dimensions.add(new DimensionEntry(location, byId(location.getPath()), i.getValue()));
 				});
 		
@@ -360,25 +340,25 @@ public class Exporter {
 	
 	private void _collectBiome() {
 		IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
-		logger.info("开始获取生物群系");
+		PLAYER_LOGGER.info("开始获取生物群系");
 		var list = server.registryAccess().registry(Registries.BIOME).orElseThrow().entrySet().stream()
 				.filter(i -> i.getKey().location().getNamespace().equals(modid))
 				.toList();
 		list.forEach(i -> {
 			ResourceLocation location = i.getKey().location();
-			logger.infoSilent(location.toString());
+			LOGGER.info(location.toString());
 			biomes.add(new BiomeEntry(location, byId(location.getPath())));
 		});
 	}
 	
 	private void _collectEffect() {
-		logger.info("开始获取药水效果");
+		PLAYER_LOGGER.info("开始获取药水效果");
 		ResourceManager manager = instance.getResourceManager();
 		BuiltInRegistries.MOB_EFFECT.entrySet().stream()
 				.filter(i -> i.getKey().location().getNamespace().equals(modid))
 				.forEach(i -> {
 					ResourceLocation location = i.getKey().location();
-					logger.infoSilent(location.toString());
+					LOGGER.info(location.toString());
 					MobEffect value = i.getValue();
 					EffectEntry e = new EffectEntry(location, value);
 					Optional<Resource> resource = manager.getResource(location.withPrefix("textures/mob_effect/").withSuffix(".png"));
@@ -417,7 +397,7 @@ public class Exporter {
 		for (int i = 0; i < lists.size(); i++) {
 			S storable = lists.get(i);
 			JsonObject object = new JsonObject();
-			int ver = storable.store(existHelper, writer, object, logger);
+			int ver = storable.store(existHelper, writer, object, PLAYER_LOGGER);
 			if (ver < 1) throw new RuntimeException("错误的版本号:" + ver);
 			if (i == 0) {
 				version = ver;
@@ -453,12 +433,8 @@ public class Exporter {
 	
 	//========================================
 	private ZipEntry newZipEntry(String path) {
-		logger.infoSilent("准备写入: " + path);
+		LOGGER.info("准备写入: " + path);
 		return new ZipEntry(path);
-	}
-	
-	private void reportError(String msg, Throwable e) {
-		logger.error(msg, e);
 	}
 	
 	
@@ -471,7 +447,7 @@ public class Exporter {
 		try {
 			run.run();
 		} catch (Throwable e) {
-			reportError(msg, e);
+			LOGGER.error(msg, e);
 			if (fail != null) fail.run();
 			return true;
 		}

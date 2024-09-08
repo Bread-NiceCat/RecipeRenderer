@@ -23,11 +23,6 @@ public class FabricRPlatform implements RPlatform {
 	}
 	
 	@Override
-	public boolean isLoaded(String modid) {
-		return FabricLoader.getInstance().isModLoaded(modid);
-	}
-	
-	@Override
 	public String getVersion(String modid) {
 		return FabricLoader.getInstance().getModContainer(modid).orElseThrow().getMetadata().getVersion().getFriendlyString();
 	}
@@ -35,11 +30,6 @@ public class FabricRPlatform implements RPlatform {
 	@Override
 	public String getLoaderVersion() {
 		return getVersion(FabricLoaderImpl.MOD_ID);
-	}
-	
-	@Override
-	public String getName() {
-		return "Fabric";
 	}
 	
 	@Override

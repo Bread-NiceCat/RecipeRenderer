@@ -24,7 +24,8 @@ public class ExportFrame extends JFrame {
 	public final DefaultScreen defaultScreen = new DefaultScreen();
 	private Screen screen;
 	public @Nullable Timer freeTimer;
-	static boolean debug = false;
+	private boolean screenLocked = false;
+	public static boolean debug = false;
 	
 	public ExportFrame(int timeout) {
 		setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
@@ -54,7 +55,7 @@ public class ExportFrame extends JFrame {
 	}
 	
 	public void setScreen(Screen screen) {
-		if (this.screen == screen) return;
+		if (screenLocked || this.screen == screen) return;
 		if (this.screen != null) {
 			this.screen.onDisable();
 			screen.frame = null;
@@ -84,6 +85,9 @@ public class ExportFrame extends JFrame {
 	}
 	
 	public void free() {
+		if (screenLocked) {
+			return;
+		}
 		if (!isBusy()) {
 			setVisible(false);
 			if (freeTimer != null && freeTimer.isRunning()) freeTimer.stop();
@@ -92,4 +96,11 @@ public class ExportFrame extends JFrame {
 		}
 	}
 	
+	public boolean isScreenLocked() {
+		return screenLocked;
+	}
+	
+	public void setScreenLocked(boolean screenLocked) {
+		this.screenLocked = screenLocked;
+	}
 }
