@@ -21,6 +21,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static cn.breadnicecat.reciperenderer.Exporter.ROOT_DIR;
 import static cn.breadnicecat.reciperenderer.RecipeRenderer.*;
 import static cn.breadnicecat.reciperenderer.utils.CommonUtils.sleep;
 import static java.lang.Math.sqrt;
@@ -35,9 +36,10 @@ import static java.lang.Math.sqrt;
  * <p>
  **/
 public class WorldlyExporter {
-	public static File OUTPUT_DIR = Exporter.WORLDLY;
+	public static File OUTPUT_DIR = new File(ROOT_DIR, "worldly");
+	;
 	private static ExistHelper NAME_HELPER = new ExistHelper(ExistHelper.fileBase(OUTPUT_DIR));
-	public static final int SCAN_LIMIT_MAX = 3;
+	public static final int SCAN_LIMIT_MAX = 6;
 	static final Minecraft instance = Minecraft.getInstance();
 	
 	private WorldlyExporterListener monitor = WorldlyExporterListener.getDefault();
@@ -48,7 +50,7 @@ public class WorldlyExporter {
 	public final int scanCount;
 	public final WorldlyContainer container;
 	private final ServerLevel level;
-	public boolean paused;
+	private boolean paused;
 	public RTimer rt;
 	private final AtomicInteger workerCount = new AtomicInteger();
 	
@@ -71,18 +73,21 @@ public class WorldlyExporter {
 			RecipeRenderer.hookRenderer(() -> {
 				instance.pauseGame(false);
 				while (state.get()) {
-					sleep(5000);
+					sleep(2000);
 				}
 			});
-			//区块x的最大边界
+			//区块坐标的最大边界
 //			int rectLen = 1000;
 			int rectLen = (int) sqrt(scanCount);
-			CompletableFuture<Void> future = CompletableFuture.completedFuture(null);
+			var futures = new CompletableFuture[scanCount];
 			//区块的加载必须由服务器线程进行，不然会死锁
 			//开始扫描区块
 			//i只用于计数,j用于记录区块的扫描值
 			for (int i = 0, j = 0; state.get() && i < scanCount; i++) {
-				if (i % 500 == 0) System.gc();
+				if (i % 500 == 0) {
+					//unload chunks
+					gclean();
+				}
 				//如果扫的数量超过预设值，就暂停
 				//虽然收集的速度远远快于生成的速度，但是不排除服务器线程抢占时间片的情况
 				while (paused || workerCount.get() > SCAN_LIMIT_MAX) {
@@ -103,12 +108,13 @@ public class WorldlyExporter {
 				
 				ExporterEntry chunkEntry = new ExporterEntry(i, chunkX, chunkZ);
 				monitor.onGenerateChunk(chunkEntry);
-				ChunkAccess chunk = level.getChunk(chunkX, chunkZ, ChunkStatus.FULL, true);
+				ChunkAccess[] chunk = new ChunkAccess[]{level.getChunk(chunkX, chunkZ, ChunkStatus.FULL, true)};
+				chunkEntry.minY = chunk[0].getMinBuildHeight();
+				chunkEntry.maxY = chunk[0].getMaxBuildHeight();
 				monitor.onGenerateChunkDone(chunkEntry);
-				chunkEntry.setAccess(chunk);
 				workerCount.incrementAndGet();
 				//委托给worker线程去收集
-				CompletableFuture<Void> newFuture = CompletableFuture.runAsync(() -> {
+				futures[i] = CompletableFuture.runAsync(() -> {
 					monitor.onScanChunkBegin(chunkEntry);
 					for (int y = chunkEntry.minY(); y <= chunkEntry.maxY(); y++) {
 						monitor.onScanLayerChanged(chunkEntry, y);
@@ -119,24 +125,24 @@ public class WorldlyExporter {
 //					    	for (int x = 0; x < sz; x++) {
 						for (int x = xst; x < xst + sz; x++) {
 							for (int z = zst; z < zst + sz; z++) {
-								chunkEntry.getChunkContainer().collect(y, chunk.getBlockState(new BlockPos(x, y, z)));
+								chunkEntry.getChunkContainer().collect(y, chunk[0].getBlockState(new BlockPos(x, y, z)));
 							}
 						}
 					}
 					workerCount.decrementAndGet();
 					monitor.onScanDone(chunkEntry);
-					
+					chunk[0] = null;//释放内存
 				}, EXECUTOR).exceptionally(t -> {
 					state.set(false);
 					LOGGER.error("Worldly导出异常", t);
 					monitor.onExportExceptionally(this, t);
 					return null;
 				});
-				future = CompletableFuture.allOf(future, newFuture);
 				j++;
 			}
-			
-			future.get();
+			LOGGER.info("区块全部生成完毕");
+			CompletableFuture.allOf(futures).get();
+			rt.pause();
 			PRETTY.toJson(container.toJson(), writer);
 			PLAYER_LOGGER.info("导出完成，共扫描" + scanCount + "个区块，用时" + rt.getString());
 			monitor.onDone(this);
@@ -149,12 +155,29 @@ public class WorldlyExporter {
 			throw exception;
 		} catch (ExecutionException | RuntimeException e) {
 			PLAYER_LOGGER.error("导出时遇到异常: " + e);
-			throw new RuntimeException(e);
+			LOGGER.error("", e);
 		} catch (InterruptedException e) {
 			LOGGER.error("被迫中断 ", e);
 		} finally {
 			state.set(false);
 		}
+	}
+	
+	public void gclean() {
+//		LOGGER.info("正在卸载生成的区块...");
+//		RTimer t = new RTimer();
+//		level.getChunkSource().tick(() -> t.get() < 2000, false);
+		System.gc();
+	}
+	
+	public void setPaused(boolean paused) {
+		this.paused = paused;
+		rt.setPaused(paused);
+		gclean();
+	}
+	
+	public boolean isPaused() {
+		return paused;
 	}
 	
 	public void checkStatus() {
@@ -178,7 +201,8 @@ public class WorldlyExporter {
 		public final int ordinal;
 		public final int chunkX;
 		public final int chunkZ;
-		private ChunkAccess access;
+		private int maxY;
+		private int minY;
 		//该区块的收集器
 		private final ChunkContainer chunkContainer;
 		
@@ -199,23 +223,15 @@ public class WorldlyExporter {
 		}
 		
 		public int maxY() {
-			return access.getMaxBuildHeight();
+			return maxY;
 		}
 		
 		public int minY() {
-			return access.getMinBuildHeight();
+			return minY;
 		}
 		
 		public int height() {
-			return access.getHeight();
-		}
-		
-		public ChunkAccess getAccess() {
-			return access;
-		}
-		
-		private void setAccess(ChunkAccess access) {
-			this.access = access;
+			return maxY() - minY();
 		}
 	}
 	

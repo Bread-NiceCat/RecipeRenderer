@@ -52,6 +52,7 @@ public class RCommand {
 									return 1;
 								}))
 								.executes(c -> {
+									if (!checkVersion(c.getSource())) return 0;
 									ServerLevel level = c.getSource().getPlayerOrException().serverLevel();
 									RecipeRenderer.worldlyExportFixed(level, 10000);
 									return 1;
@@ -91,7 +92,7 @@ public class RCommand {
 									return 1;
 								}))
 				).then(literal("hand").executes(c -> {
-							getWindow().setScreen(scn._setTarget(new IconWrapper((o) -> new ItemIcon(o, 128, instance.player.getItemInHand(InteractionHand.MAIN_HAND), scn.getUseOverride() ? instance.player : null)), true, false, true));
+							getWindow().setScreen(scn._setTarget(new IconWrapper((o) -> new ItemIcon(o, 128, instance.player.getItemInHand(InteractionHand.MAIN_HAND), scn.getUseOverride() ? instance.player : null)), false, true));
 							return 1;
 						})
 				);
@@ -100,7 +101,7 @@ public class RCommand {
 		var outdate = literal("ignoreOutdated").executes(c -> {
 			if (outdated) {
 				outdated = false;
-				c.getSource().sendSystemMessage(Component.literal("好的,但我们仍然建议使用您最新版本的RR去导出。").withStyle(ChatFormatting.YELLOW));
+				c.getSource().sendSystemMessage(Component.literal("好的,但我们仍然建议使用您最新版本去导出。").withStyle(ChatFormatting.YELLOW));
 			} else {
 				c.getSource().sendSystemMessage(Component.literal("当前无需处理。").withStyle(ChatFormatting.RED));
 			}
@@ -120,11 +121,7 @@ public class RCommand {
 		var builder = literal("export");
 		for (String modid : allMods.keySet()) {
 			builder.then(literal(modid).executes(c -> {
-				if (outdated) {
-					c.getSource().sendFailure(Component.literal("当前版本不是已发布的最新版本(" + modVersion + ", 最新版:" + latestVer + "), 导出的数据可能与会与最新版有分歧"));
-					c.getSource().sendSystemMessage(Component.literal("输入\"/reciperenderer ignoreOutdated\"忽略此问题").withStyle(ChatFormatting.YELLOW));
-					return 0;
-				}
+				if (!checkVersion(c.getSource())) return 0;
 				try {
 					export(modid);
 				} catch (RuntimeException e) {
@@ -152,4 +149,14 @@ public class RCommand {
 		dispatcher.register(rr.then(builder).then(worldly).then(open).then(gc));
 	}
 	
+	/**
+	 * @return true最新版本
+	 */
+	static boolean checkVersion(CommandSourceStack source) {
+		if (outdated) {
+			source.sendFailure(Component.literal("当前版本不是已发布的最新版本(" + modVersion + ", 最新版:" + latestVer + "), 导出的数据可能与会与最新版有分歧"));
+			source.sendSystemMessage(Component.literal("输入\"/reciperenderer ignoreOutdated\"忽略此问题").withStyle(ChatFormatting.YELLOW));
+		}
+		return !outdated;
+	}
 }

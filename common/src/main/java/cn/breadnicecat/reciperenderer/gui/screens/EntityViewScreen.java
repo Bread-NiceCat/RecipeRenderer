@@ -43,6 +43,7 @@ import static javax.swing.JOptionPane.ERROR_MESSAGE;
 public class EntityViewScreen extends Screen {
 	private static final Dimension SIZE = new Dimension(300, 300);
 	public static final EntityViewScreen SIMPLE = new EntityViewScreen();
+	public static boolean showTip = false;
 	
 	private final ByteArrayOutputStream gifTarget = new ByteArrayOutputStream();
 	private final AnimatedGifEncoder gifEncoder = make(new AnimatedGifEncoder(), e -> {
@@ -242,23 +243,22 @@ public class EntityViewScreen extends Screen {
 	}
 	
 	
-	public EntityViewScreen _setTarget(IconWrapper ta, boolean requestFocus, boolean showHixboxEnabled, boolean overrideUsing) {
-		showHitbox.setEnabled(showHixboxEnabled);
-		useOverride.setEnabled(overrideUsing);
+	public EntityViewScreen _setTarget(IconWrapper ta, boolean showHixboxEnabled, boolean overrideUsing) {
+		showHitbox.setVisible(showHixboxEnabled);
+		useOverride.setVisible(overrideUsing);
 		if (wrapper != ta) {
 			wrapper = ta;
 			view.update(PoseOffset.NONE);
 		}
-		if (requestFocus) requestFocusInWindow();
 		return this;
 	}
 	
 	public EntityViewScreen setTarget(LivingEntity e) {
-		return _setTarget(new IconWrapper(o -> new EntityIcon(o, 128, e)), true, true, false);
+		return _setTarget(new IconWrapper(o -> new EntityIcon(o, 128, e)), true, false);
 	}
 	
 	public EntityViewScreen setTarget(ItemStack is) {
-		return _setTarget(new IconWrapper(o -> new ItemIcon(o, 128, is, getUseOverride() ? Minecraft.getInstance().player : null)), true, false, true);
+		return _setTarget(new IconWrapper(o -> new ItemIcon(o, 128, is, getUseOverride() ? Minecraft.getInstance().player : null)), false, true);
 	}
 	
 	public boolean getUseOverride() {
@@ -271,7 +271,10 @@ public class EntityViewScreen extends Screen {
 	public void onEnable() {
 		alwaysOnTop = frame.isAlwaysOnTop();
 		frame.setAlwaysOnTop(true);
-		JOptionPane.showMessageDialog(this, "左键拖动旋转,右键拖动平移,滚轮缩放,单击滚轮重置.");
+		if (showTip) {
+			JOptionPane.showMessageDialog(this, "左键拖动旋转,右键拖动平移,滚轮缩放,单击滚轮重置.");
+			showTip = false;
+		}
 	}
 	
 	@Override

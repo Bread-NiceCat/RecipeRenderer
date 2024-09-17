@@ -3,9 +3,14 @@ package cn.breadnicecat.reciperenderer;
 import cn.breadnicecat.reciperenderer.entry.*;
 import cn.breadnicecat.reciperenderer.gui.ExportFrame;
 import cn.breadnicecat.reciperenderer.render.IconWrapper;
-import cn.breadnicecat.reciperenderer.utils.*;
+import cn.breadnicecat.reciperenderer.utils.ExistHelper;
+import cn.breadnicecat.reciperenderer.utils.ItemState;
+import cn.breadnicecat.reciperenderer.utils.RTimer;
+import cn.breadnicecat.reciperenderer.utils.Runnable_WithException;
 import com.google.gson.JsonObject;
 import com.mojang.datafixers.util.Pair;
+import com.mojang.serialization.DataResult;
+import com.mojang.serialization.JsonOps;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.language.ClientLanguage;
 import net.minecraft.client.server.IntegratedServer;
@@ -22,6 +27,9 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.RecipeManager;
+import net.minecraft.world.item.crafting.RecipeSerializer;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.*;
@@ -49,10 +57,8 @@ public class Exporter {
 	private final AtomicBoolean validator = new AtomicBoolean(true);
 	
 	static Minecraft instance = Minecraft.getInstance();
-	
 	public static Exporter current;
-	public static File ROOT_DIR = new File(ExportFrame.debug ? new File("build") : instance.gameDirectory, "rr_export");
-	public static File WORLDLY = new File(ROOT_DIR, "worldly");
+	public static final File ROOT_DIR = new File(ExportFrame.debug ? new File("build") : instance.gameDirectory, "rr_export");
 	
 	final String modid;
 	
@@ -72,16 +78,15 @@ public class Exporter {
 	List<EffectEntry> effects = new LinkedList<>();
 	List<BiomeEntry> biomes = new LinkedList<>();
 	List<DimensionEntry> dimensions = new LinkedList<>();
-	List<JsonObject> recipes = new LinkedList<>();
-	Map<String, Class<?>> recipeTypes = new TreeMap<>();
+	List<RecipeEntry> recipes = new LinkedList<>();
 	
 	List<List<? extends LocalizableV2>> localizable = List.of(items, entities, enchantments, effects);
 	
 	public Exporter(String modid) {
 		this.modid = modid;
-		
 		this.modRoot = new File(ROOT_DIR, modid);
-		this.outputfile = new File(modRoot, "output.zip");
+		ExistHelper nameHelper = new ExistHelper(ExistHelper.fileBase(modRoot));
+		this.outputfile = new File(modRoot, nameHelper.getModified(modid + "-output.zip"));
 	}
 	
 	public void runAsync() {
@@ -109,10 +114,7 @@ public class Exporter {
 			
 			tryRun("导出物品时遇到致命错误", this::_collectItem, items::clear);
 			tryRun("导出实体时遇到致命错误", this::_collectEntity, entities::clear);
-			tryRun("导出配方时遇到致命错误", this::_collectRecipe, () -> {
-				recipes.clear();
-				recipeTypes.clear();
-			});
+			tryRun("导出配方时遇到致命错误", this::_collectRecipe, recipes::clear);
 			tryRun("导出时药水效果时遇到致命错误", this::_collectEffect, effects::clear);
 			tryRun("导出附魔时遇到致命错误", this::_collectEnchant, enchantments::clear);
 			tryRun("导出生物群系时遇到致命错误", this::_collectBiome, biomes::clear);
@@ -169,32 +171,12 @@ public class Exporter {
 			write("biome", output, "biome.jsons", biomes);
 		}
 		if (!recipes.isEmpty()) {
-			joiner.add(recipes.size() + "个配方(涉及" + recipeTypes.size() + "种类型)");
+			joiner.add(recipes.size() + "个配方");
 			PLAYER_LOGGER.info("写入配方");
-			writeJson(output, "recipe.jsons", recipes, null);
-			PLAYER_LOGGER.info("反编译配方序列化类");
-			HashMap<Class<?>, byte[]> cache = new HashMap<>();
-			for (Map.Entry<String, Class<?>> entry : recipeTypes.entrySet()) {
-				String k = entry.getKey();
-				output.putNextEntry(newZipEntry("recipe_types/" + k + ".java"));
-				try {
-					Class<?> clz = entry.getValue();
-					byte[] bytes = cache.get(clz);
-					if (bytes == null) {
-						LOGGER.info("decompiling...");
-						bytes = FernFlowerUtils.decompile(clz).getBytes();
-						cache.put(clz, bytes);
-					} else {
-						LOGGER.info("decompile SKIP");
-					}
-					LOGGER.info("decompiled {}", clz.getName());
-					output.write(bytes);
-				} catch (Throwable e) {
-					LOGGER.error("反编译" + k + "失败", e);
-				} finally {
-					output.closeEntry();
-				}
-			}
+			var list = recipes.stream().sorted(Comparator.comparing(other -> other.type))
+					.map(RecipeEntry::format)
+					.toList();
+			writeJson(output, "recipe.jsons", list, null);
 			
 		}
 		
@@ -299,19 +281,31 @@ public class Exporter {
 		Language.inject(rawl);
 	}
 	
-	private void _collectRecipe() throws IOException {
+	@SuppressWarnings({"unchecked", "rawtypes"})
+	private void _collectRecipe() {
 		PLAYER_LOGGER.info("开始获取配方");
-		ResourceManager data = Objects.requireNonNull(instance.getSingleplayerServer()).getResourceManager();
-		Map<ResourceLocation, Resource> listed = data.listResources("recipes",
-				t -> t.getNamespace().equals(modid) && t.getPath().endsWith(".json"));
-		for (Map.Entry<ResourceLocation, Resource> value : listed.entrySet()) {
-			LOGGER.info(value.getKey().toString());
-			Resource resource = value.getValue();
-			JsonObject json = GSON.fromJson(resource.openAsReader(), JsonObject.class);
-			String type = json.get("type").getAsString();
-			recipeTypes.put(type, BuiltInRegistries.RECIPE_SERIALIZER.get(ResourceLocation.parse(type)).getClass());
-			recipes.add(json);
+		RecipeManager manager = Objects.requireNonNull(instance.getSingleplayerServer().getRecipeManager());
+		for (RecipeHolder<?> holder : manager.getRecipes()) {
+			if (holder.id().getNamespace().equals(modid)) {
+				DataResult<JsonObject> result = ((RecipeSerializer) (holder.value().getSerializer()))
+						.codec()
+						.codec()
+						.encodeStart(JsonOps.INSTANCE, holder.value());
+				JsonObject json = result.getOrThrow();
+				recipes.add(new RecipeEntry(holder.id(), json));
+			}
 		}
+//		ResourceManager data = Objects.requireNonNull(instance.getSingleplayerServer()).getResourceManager();
+//		Map<ResourceLocation, Resource> listed = data.listResources("recipes",
+//				t -> t.getNamespace().equals(modid) && t.getPath().endsWith(".json"));
+//		for (Map.Entry<ResourceLocation, Resource> value : listed.entrySet()) {
+//			LOGGER.info(value.getKey().toString());
+//			Resource resource = value.getValue();
+//			JsonObject json = GSON.fromJson(resource.openAsReader(), JsonObject.class);
+//			String type = json.get("type").getAsString();
+//			recipeTypes.put(type, BuiltInRegistries.RECIPE_SERIALIZER.get(ResourceLocation.parse(type)).getClass());
+//			recipes.add(json);
+//		}
 	}
 	
 	private void _collectEnchant() {
@@ -447,6 +441,7 @@ public class Exporter {
 		try {
 			run.run();
 		} catch (Throwable e) {
+			PLAYER_LOGGER.error(msg + "," + e);
 			LOGGER.error(msg, e);
 			if (fail != null) fail.run();
 			return true;

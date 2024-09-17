@@ -3,88 +3,80 @@ plugins {
     id 'dev.architectury.loom' version '1.7-SNAPSHOT' apply false
     id 'architectury-plugin' version '3.4-SNAPSHOT'
     id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
+    id "io.github.pacifistmc.forgix" version "1.2.+"
 }
-
 architectury {
     minecraft = minecraft_version
 }
+ext {
+    use_jbr_feature = (println(compileJava.javaCompiler.get().metadata.vendor)) == "JetBrains"
+}
+String archive_file_base_name = "${archives_name}-${minecraft_version}"
+forgix {
+    group = maven_group
+    mergedJarName = "${archive_file_base_name}-merged-${mod_version}.jar"
+    outputDir = "build/libs/merged"
+    removeDuplicate "cn.breadnicecat.reciperenderer"
+    neoforge {
+        println(jarLocation = "build/libs/${archive_file_base_name}-neoforge-${mod_version}.jar")
+        return null
+    }
+    fabric {
+        println(jarLocation = "build/libs/${archive_file_base_name}-fabric-${mod_version}.jar")
+        return null
+    }
+}
+mergeJars {
+    dependsOn ':fabric:build'
+    dependsOn ':neoforge:build'
+}
+build {
+    finalizedBy mergeJars
+}
+
 allprojects {
     apply plugin: "java"
     apply plugin: "idea"
     apply plugin: "architectury-plugin"
     apply plugin: "maven-publish"
-
     version = mod_version
     group = maven_group
-    archivesBaseName = "$archives_name-$minecraft_version"
-
+    archivesBaseName = archive_file_base_name
     repositories {
         if (Locale.getDefault() == Locale.CHINA) {
-            //Faster Repo For Chinese
             var aliyun = maven { url = "https://maven.aliyun.com/repository/public" }
-            remove(aliyun)
-            addFirst(aliyun)
-//        maven { url = "https://download.mcbbs.net/assets/" }
-        }
-        //================
-        flatDir {
-            dir rootProject.file("libs")
-            content { includeGroup "native" }
+            remove aliyun
+            addFirst aliyun
         }
         maven { url = "https://modmaven.dev" }
-        maven {
-            url "https://cursemaven.com"
-            content { includeGroup "curse.maven" }
-        }
-        maven { url "https://maven.minecraftforge.net/" }
         maven { url = 'https://maven.parchmentmc.org' }
-
-    }
-
-    //给gitee擦屁股!!!
-    getRepositories().forEach { repo ->
-        if (repo instanceof MavenArtifactRepository) {
-            def url = repo.getUrl()
-            def us = url.toString().split("://", 2)
-            if (us[0] == "http") {
-                println("检测到http协议repo($url),正在强制转化为https协议")
-                repo.url = new URI("https://${us[1]}")
-            }
-        }
-    }
-
-    tasks.withType(JavaCompile).configureEach {
-        options.encoding = "UTF-8"
-    }
-
-    java {
-        withSourcesJar()
-    }
-
-    jar {
-        manifest {
-            attributes(BuiltTime: new Date())
-        }
     }
 }
 subprojects {
     apply plugin: "dev.architectury.loom"
     dependencies {
-        minecraft "com.mojang:minecraft:${minecraft_version}"
+        minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
         mappings loom.layered() {
             officialMojangMappings()
             parchment("org.parchmentmc.data:${parchment_version}")
         }
-
+    }
+    java {
+        withSourcesJar()
+        targetCompatibility = 21
+        sourceCompatibility = 21
+    }
+    tasks.withType(JavaCompile).configureEach {
+        it.options.encoding = "UTF-8"
+        it.options.release = 21
     }
 }
-
 //declare repositories
 println("=".repeat(64))
-println("here in project $project.name")
+println("here in project ${project.name}")
 println("repo here=>")
 getRepositories().forEach { it ->
-    if (it instanceof MavenArtifactRepository) {
+    if (it instanceof UrlArtifactRepository) {
         println it.url
     } else if (it instanceof FlatDirectoryArtifactRepository) {
         println it.dirs

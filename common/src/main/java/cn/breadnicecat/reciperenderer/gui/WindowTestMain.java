@@ -22,7 +22,7 @@ import java.awt.event.MouseEvent;
 public class WindowTestMain {
 	public static void main(String[] args) {
 		ExportFrame.debug = true;
-		ExportFrame exportFrame = new ExportFrame(5000);
+		ExportFrame exportFrame = new ExportFrame();
 		exportFrame.setAlwaysOnTop(true);
 		JFrame cont = new JFrame();
 		cont.setTitle("控制器");
@@ -33,7 +33,7 @@ public class WindowTestMain {
 		
 		next.addMouseListener(new MouseAdapter() {
 			Screen[] sc = new Screen[]{exportFrame.defaultScreen, simple, new WorldlyProgressScreen(null)};
-			int i = 2;
+			int i = 0;
 			
 			@Override
 			public void mousePressed(MouseEvent e) {

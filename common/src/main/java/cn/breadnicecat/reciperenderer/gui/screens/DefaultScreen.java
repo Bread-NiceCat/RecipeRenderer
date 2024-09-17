@@ -46,14 +46,14 @@ public class DefaultScreen extends Screen {
 	}
 	
 	private final JLabel label;
-	
-	@Override
-	public void repaint(Rectangle r) {
-		if (frame.freeTimer != null) {
-			frame.freeTimer.restart();
-		}
-		super.repaint(r);
-	}
+
+//	@Override
+//	public void repaint(Rectangle r) {
+//		if (frame.freeTimer != null) {
+//			frame.freeTimer.restart();
+//		}
+//		super.repaint(r);
+//	}
 	
 	public DefaultScreen() {
 		this.label = new JLabel("/rr export modid");

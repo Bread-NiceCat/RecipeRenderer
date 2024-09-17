@@ -45,6 +45,7 @@ public class RecipeRenderer {
 	public static final String UPDATE_URL = "https://gitee.com/Bread-NiceCat/RecipeRenderer/raw/master/gradle.properties";
 	
 	public static final boolean DEV;
+	public static boolean skipUpdateCheck;
 	
 	static {
 		//检查是否处于Dev环境
@@ -86,7 +87,7 @@ public class RecipeRenderer {
 	private static ExportFrame launchWindow() {
 		RTimer t = new RTimer();
 		LOGGER.info("正在启动窗口");
-		exportFrame = new ExportFrame(5000);
+		exportFrame = new ExportFrame();
 		LOGGER.info("窗口启动成功,用时{}", t);
 		return exportFrame;
 	}
@@ -113,19 +114,22 @@ public class RecipeRenderer {
 			launchWindow().free();
 		});
 		
-		
-		EXECUTOR.submit(() -> {
-			try {
-				latestVer = getLatestVersion(new URL(UPDATE_URL));
-				LOGGER.info("当前版本: {}", modVersion);
-				LOGGER.info("获取到最新版本: {}", latestVer);
-				if (!modVersion.equals(latestVer)) {
-					RecipeRenderer.outdated = true;
+		if (!(skipUpdateCheck | DEV)) {
+			EXECUTOR.submit(() -> {
+				try {
+					latestVer = getLatestVersion(new URL(UPDATE_URL));
+					LOGGER.info("当前版本: {}", modVersion);
+					LOGGER.info("获取到最新版本: {}", latestVer);
+					if (!modVersion.equals(latestVer)) {
+						RecipeRenderer.outdated = true;
+					}
+				} catch (Exception e) {
+					LOGGER.warn("无法检查更新", e);
 				}
-			} catch (Exception e) {
-				LOGGER.warn("无法检查更新", e);
-			}
-		});
+			});
+		} else {
+			LOGGER.info("跳过检查更新");
+		}
 	}
 	
 	

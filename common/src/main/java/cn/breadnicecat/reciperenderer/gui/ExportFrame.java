@@ -4,7 +4,6 @@ import cn.breadnicecat.reciperenderer.Exporter;
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
 import cn.breadnicecat.reciperenderer.gui.screens.DefaultScreen;
 import cn.breadnicecat.reciperenderer.gui.screens.Screen;
-import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import java.awt.event.WindowAdapter;
@@ -23,11 +22,11 @@ import java.io.File;
 public class ExportFrame extends JFrame {
 	public final DefaultScreen defaultScreen = new DefaultScreen();
 	private Screen screen;
-	public @Nullable Timer freeTimer;
+	//	public @Nullable Timer freeTimer;
 	private boolean screenLocked = false;
 	public static boolean debug = false;
 	
-	public ExportFrame(int timeout) {
+	public ExportFrame() {
 		setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
 		addWindowListener(new WindowAdapter() {
 			@Override
@@ -35,18 +34,15 @@ public class ExportFrame extends JFrame {
 				free();
 			}
 		});
-		if (timeout > 0) freeTimer = new Timer(timeout, (e) -> {
-			((Timer) e.getSource()).stop();
-			free();
-		});
+//		if (timeout > 0) freeTimer = new Timer(timeout, (e) -> {
+//			((Timer) e.getSource()).stop();
+//			free();
+//		});
 		setResizable(false);
 		setTitle(RecipeRenderer.MOD_NAME);
 		setScreen(defaultScreen);
 	}
 	
-	public ExportFrame() {
-		this(-1);
-	}
 	
 	final static File D_ROOT_DIR = new File(".");
 	
@@ -61,15 +57,14 @@ public class ExportFrame extends JFrame {
 			screen.frame = null;
 			remove(this.screen);
 		}
+		this.setExtendedState(NORMAL);
 		this.setVisible(true);
 		this.screen = screen;
-		
-		if (isBusy()) {
-			if (freeTimer != null) freeTimer.stop();
-		} else {
-			if (freeTimer != null) freeTimer.start();
-		}
-		
+//		if (isBusy()) {
+//			if (freeTimer != null) freeTimer.stop();
+//		} else {
+//			if (freeTimer != null) freeTimer.start();
+//		}
 		add(screen);
 		screen.frame = this;
 		setSize(screen.getScreenSize());
@@ -86,14 +81,12 @@ public class ExportFrame extends JFrame {
 	
 	public void free() {
 		if (screenLocked) {
+			JOptionPane.showMessageDialog(this, "窗口已经锁定,无法释放", "无法释放", JOptionPane.WARNING_MESSAGE);
 			return;
 		}
-		if (!isBusy()) {
-			setVisible(false);
-			if (freeTimer != null && freeTimer.isRunning()) freeTimer.stop();
-		} else {
-			setScreen(defaultScreen);
-		}
+		setScreen(defaultScreen);
+		setVisible(false);
+//			if (freeTimer != null && freeTimer.isRunning()) freeTimer.stop();
 	}
 	
 	public boolean isScreenLocked() {
