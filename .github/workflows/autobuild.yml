@@ -1,5 +1,5 @@
 name: build
-on: [ pull_request, push ]
+on: [ -, push ]
 
 jobs:
   build:
@@ -19,14 +19,22 @@ jobs:
           java-version: ${{ matrix.java }}
           distribution: 'microsoft'
 
-      - name: Build with Gradle
-        uses: gradle/gradle-build-action@v3
-        with:
-          arguments: build
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: upload forge
+      - name: Build with Gradle
+        run: ./gradlew build
+
+      - name: upload fabric
         uses: actions/upload-artifact@v4
         with:
-          name: artifact
-          path: build/libs/merged/*[0-9].jar
+          name: fabric
+          path: fabric/build/libs/*[0-9].jar
+          if-no-files-found: error
+
+      - name: upload neoforge
+        uses: actions/upload-artifact@v4
+        with:
+          name: neoforge
+          path: neoforge/build/libs/*[0-9].jar
           if-no-files-found: error

@@ -16,6 +16,9 @@
   "entrypoints": {
     "main": [
       "cn.breadnicecat.reciperenderer.fabric.RecipeRendererImpl"
+    ],
+    "jei_mod_plugin": [
+      "cn.breadnicecat.reciperenderer.JEIPlugin"
     ]
   },
   "depends": {

@@ -1,8 +1,11 @@
 package cn.breadnicecat.reciperenderer.utils;
 
+import net.minecraft.Util;
 import org.jetbrains.annotations.Contract;
+import org.slf4j.Logger;
+import org.slf4j.event.Level;
 
-import java.util.function.Consumer;
+import java.io.File;
 import java.util.function.Supplier;
 
 /**
@@ -22,6 +25,21 @@ public class CommonUtils {
 		return t.get();
 	}
 	
+	public static void open(File file) {
+		file.mkdirs();
+		Util.getPlatform().openFile(file);
+	}
+	
+	public static void log(Logger logger, Level level, String msg) {
+		switch (level) {
+			case ERROR -> logger.error(msg);
+			case WARN -> logger.warn(msg);
+			case INFO -> logger.info(msg);
+			case DEBUG -> logger.debug(msg);
+			case TRACE -> logger.trace(msg);
+		}
+	}
+	
 	/**
 	 * 从注册名中获取名称
 	 *
@@ -39,48 +57,9 @@ public class CommonUtils {
 		return sb.substring(0, sb.length() - 1);
 	}
 	
-	/**
-	 * 依次让所有guest拜访house
-	 */
-	@SafeVarargs
-	public static <I> void accept(Consumer<I> house, I... guests) {
-		for (I guest : guests) {
-			house.accept(guest);
-		}
-	}
-	
-	@SafeVarargs
-	public static <I> I visit(I visitor, Consumer<I>... house) {
-		for (Consumer<I> h : house) {
-			h.accept(visitor);
-		}
-		return visitor;
-	}
-	
-	public static <I> I make(I visitor, Consumer<I> house) {
-		house.accept(visitor);
-		return visitor;
-	}
-	
 	@Contract()//把->fail顶掉
 	public static <T> T impossibleCode() {
 		throw new AssertionError("Impossible code invoked. It's a bug, please report it to us");
-	}
-	
-	public static <T> T TODO(String st) {
-		throw new AssertionError(st);
-	}
-	
-	public static <T> T TODO() {
-		return impossibleCode();
-	}
-	
-	public static <T> T orElse(T value, T defaultValue) {
-		return value == null ? defaultValue : value;
-	}
-	
-	public static <T> T orElse(T value, Supplier<T> defaultValue) {
-		return value == null ? defaultValue.get() : value;
 	}
 	
 }

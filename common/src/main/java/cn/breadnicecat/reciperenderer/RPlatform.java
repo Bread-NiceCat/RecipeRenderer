@@ -1,5 +1,7 @@
 package cn.breadnicecat.reciperenderer;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.util.stream.Stream;
 
 /**
@@ -16,11 +18,15 @@ public interface RPlatform {
 	
 	RecipeRenderer.Platform getPlatform();
 	
-	String getVersion(String modid);
+	@Nullable String getVersion(String modid);
+	
+	default boolean isLoaded(String modid) {
+		return getVersion(modid) != null;
+	}
 	
 	String getLoaderVersion();
 	
-	default String getName() {
+	default String getLoaderName() {
 		return getPlatform().getName();
 	}
 }

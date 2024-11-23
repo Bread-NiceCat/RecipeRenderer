@@ -4,6 +4,7 @@ import cn.breadnicecat.reciperenderer.RPlatform;
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.internal.versions.neoforge.NeoForgeVersion;
+import net.neoforged.neoforgespi.language.IModFileInfo;
 import net.neoforged.neoforgespi.language.IModInfo;
 
 import java.util.stream.Stream;
@@ -25,13 +26,15 @@ public class ForgeRPlatform implements RPlatform {
 	
 	@Override
 	public String getVersion(String modid) {
-		return ModList.get().getModFileById(modid).versionString();
+		IModFileInfo file = ModList.get().getModFileById(modid);
+		return file != null ? file.versionString() : null;
 	}
 	
 	@Override
 	public String getLoaderVersion() {
 		return NeoForgeVersion.getVersion();
 	}
+	
 	
 	@Override
 	public RecipeRenderer.Platform getPlatform() {

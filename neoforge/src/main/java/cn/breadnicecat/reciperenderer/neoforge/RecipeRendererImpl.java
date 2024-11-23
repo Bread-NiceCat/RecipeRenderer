@@ -1,16 +1,21 @@
 package cn.breadnicecat.reciperenderer.neoforge;
 
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
-import net.neoforged.api.distmarker.Dist;
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import net.minecraft.commands.CommandBuildContext;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.loading.FMLLoader;
-import net.neoforged.neoforge.client.event.RenderFrameEvent;
+import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.data.loading.DatagenModLoader;
-import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
-import static cn.breadnicecat.reciperenderer.RecipeRenderer.*;
+import static cn.breadnicecat.reciperenderer.RecipeExporter.getAllRecipeTypes;
+import static cn.breadnicecat.reciperenderer.RecipeRenderer.MOD_ID;
+import static com.mojang.brigadier.arguments.StringArgumentType.getString;
+import static net.minecraft.commands.Commands.argument;
+import static net.minecraft.commands.Commands.literal;
 
 /**
  * Created in 2024/7/8 下午5:12
@@ -24,22 +29,33 @@ import static cn.breadnicecat.reciperenderer.RecipeRenderer.*;
 @Mod(MOD_ID)
 public class RecipeRendererImpl {
 	public RecipeRendererImpl() {
-		if (FMLLoader.getDist() == Dist.DEDICATED_SERVER || DatagenModLoader.isRunningDataGen()) {
-			System.out.println("处于服务器或Datagen环境下,跳过加载!");
-			return;
-		}
-		
 		RecipeRenderer.init(new ForgeRPlatform());
 		IEventBus eventBus = NeoForge.EVENT_BUS;
 		eventBus.addListener(this::onRegisterCommands);
-		eventBus.addListener(this::onFrameUpdate);
 	}
 	
-	public void onRegisterCommands(RegisterCommandsEvent event) {
-		_onRegisterCMD(event.getBuildContext(), event.getDispatcher());
-	}
-	
-	public void onFrameUpdate(RenderFrameEvent.Post event) {
-		_onFrameUpdate();
+	public void onRegisterCommands(RegisterClientCommandsEvent event) {
+		CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
+		CommandBuildContext context = event.getBuildContext();
+		
+		dispatcher.register(literal(RecipeRenderer.MOD_ID)
+				.then(literal("open").executes(c -> {
+					RecipeRenderer.open();
+					return 0;
+				}))
+				.then(literal("export")
+						.then(argument("recipe_type", StringArgumentType.greedyString())
+								.suggests((c, builder) -> {
+									getAllRecipeTypes().map(ResourceLocation::getNamespace).distinct().forEach(m -> builder.suggest(m + ":*"));
+									getAllRecipeTypes().map(ResourceLocation::toString).forEach(builder::suggest);
+									return builder.buildFuture();
+								})
+								.executes(c -> {
+									RecipeRenderer.export(getString(c, "recipe_type"));
+									return 0;
+								})
+						)
+				)
+		);
 	}
 }

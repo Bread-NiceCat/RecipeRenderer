@@ -16,7 +16,6 @@ forgix {
     group = maven_group
     mergedJarName = "${archive_file_base_name}-merged-${mod_version}.jar"
     outputDir = "build/libs/merged"
-    removeDuplicate "cn.breadnicecat.reciperenderer"
     neoforge {
         println(jarLocation = "build/libs/${archive_file_base_name}-neoforge-${mod_version}.jar")
         return null

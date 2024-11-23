@@ -6,7 +6,6 @@
   "client": [
   ],
   "mixins": [
-    "MixinCreativeModeTabs"
   ],
   "injectors": {
     "defaultRequire": 1

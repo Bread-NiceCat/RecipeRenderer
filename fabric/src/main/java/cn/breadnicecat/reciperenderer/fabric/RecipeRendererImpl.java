@@ -1,12 +1,17 @@
 package cn.breadnicecat.reciperenderer.fabric;
 
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
-import net.fabricmc.api.EnvType;
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.fabricmc.fabric.impl.datagen.FabricDataGenHelper;
-import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import net.minecraft.commands.CommandBuildContext;
+import net.minecraft.resources.ResourceLocation;
+
+import static cn.breadnicecat.reciperenderer.RecipeExporter.getAllRecipeTypes;
+import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.argument;
+import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal;
 
 /**
  * Created in 2024/7/8 下午5:09
@@ -19,18 +24,32 @@ import net.fabricmc.loader.api.FabricLoader;
  **/
 public class RecipeRendererImpl implements ModInitializer {
 	
-	@SuppressWarnings("UnstableApiUsage")
 	@Override
 	public void onInitialize() {
-		if (FabricLoader.getInstance().getEnvironmentType() == EnvType.SERVER || FabricDataGenHelper.ENABLED) {
-			System.out.println("处于服务器或Datagen环境下,跳过加载!");
-			return;
-		}
 		RecipeRenderer.init(new FabricRPlatform());
-		WorldRenderEvents.END.register((p) -> {
-			RecipeRenderer._onFrameUpdate();
-		});
-		CommandRegistrationCallback.EVENT.register((dispatcher, context, b) -> RecipeRenderer._onRegisterCMD(context, dispatcher));
+		ClientCommandRegistrationCallback.EVENT.register(this::onRegisterCommand);
+	}
+	
+	private void onRegisterCommand(CommandDispatcher<FabricClientCommandSource> dispatcher, CommandBuildContext context) {
+		dispatcher.register(literal(RecipeRenderer.MOD_ID)
+				.then(literal("open").executes(c -> {
+					RecipeRenderer.open();
+					return 0;
+				}))
+				.then(literal("export")
+						.then(argument("recipe_type", StringArgumentType.greedyString())
+								.suggests((c, builder) -> {
+									getAllRecipeTypes().map(ResourceLocation::getNamespace).distinct().forEach(m -> builder.suggest(m + ":*"));
+									getAllRecipeTypes().map(ResourceLocation::toString).forEach(builder::suggest);
+									return builder.buildFuture();
+								})
+								.executes(c -> {
+									RecipeRenderer.export(StringArgumentType.getString(c, "recipe_type"));
+									return 0;
+								})
+						)
+				)
+		);
 	}
 	
 }
