@@ -2,12 +2,21 @@ package cn.breadnicecat.reciperenderer.exporter.jei;
 
 
 import cn.breadnicecat.reciperenderer.RRExtension;
+import cn.breadnicecat.reciperenderer.RecipeRenderer;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
+import mezz.jei.api.recipe.RecipeType;
+import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.util.Optional;
+
+import static net.minecraft.commands.Commands.argument;
 
 /**
  * Created in 2024/11/24 09:49
@@ -22,26 +31,67 @@ public class JEIExporter implements RRExtension {
 	
 	private static final Logger logger = LoggerFactory.getLogger(JEIExporter.class);
 	
+	public static final String ID = "jei";
+	public static final File workingDir = new File(RecipeRenderer.exportDir, ID);
+	
 	@Override
 	public ArgumentBuilder<CommandSourceStack, ?> buildCommand() {
-		return Commands.literal("run").executes(c -> {
-			c.getSource().sendFailure(Component.literal("未完成的特性,仍在测试"));
-			return 1;
-		});
+		return argument("namespace", StringArgumentType.string())
+				.suggests(((context, builder) -> {
+					getJEIRuntime().ifPresent(runtime -> {
+						runtime.getJeiHelpers().getAllRecipeTypes()
+								.map(RecipeType::getUid)
+								.map(ResourceLocation::getNamespace)
+								.distinct()
+								.forEach(builder::suggest);
+					});
+					return builder.buildFuture();
+				}))
+				.then(argument("path", StringArgumentType.string())
+						.suggests(((context, builder) -> {
+							getJEIRuntime().ifPresent(runtime -> {
+								String namespace = StringArgumentType.getString(context, "namespace");
+								runtime.getJeiHelpers().getAllRecipeTypes()
+										.map(RecipeType::getUid)
+										.filter(r -> r.getNamespace().equals(namespace))
+										.map(ResourceLocation::getPath)
+										.forEach(builder::suggest);
+							});
+							return builder.buildFuture();
+						}))
+						.executes(context -> {
+							String namespace = StringArgumentType.getString(context, "namespace");
+							String path = StringArgumentType.getString(context, "path");
+							IJeiRuntime runtime = getJEIRuntimeOrThrow();
+							ResourceLocation uid = ResourceLocation.fromNamespaceAndPath(namespace, path);
+							export(context.getSource(), runtime, runtime.getJeiHelpers().getRecipeType(uid).orElseThrow(() -> new IllegalArgumentException("无效的配方类型")));
+							return 1;
+						}))
+				.executes(context -> {
+					CommandSourceStack source = context.getSource();
+					String namespace = StringArgumentType.getString(context, "namespace");
+					IJeiRuntime runtime = getJEIRuntimeOrThrow();
+					runtime.getJeiHelpers().getAllRecipeTypes()
+							.filter(r -> r.getUid().getNamespace().equals(namespace))
+							.forEach(r -> {
+								export(source, runtime, r);
+							});
+					return 1;
+				});
 	}
-
-//	{
-//		IJeiRuntime runtime = JEIPlugin.INSTANCE.runtime;
-//	}
-
-//	private void doExport(RecipeType<?> recipeType) {
-//		logger.info("开始JEI导出:{}", recipeType);
-//		try {
-//			DEBUGS.runGroovyScript(new File(DEBUGS.TEST_SRC_CODE, "jei.groovy"), Map.of("type", recipeType, "runtime", INSTANCE.runtime));
-//		} catch (Exception e) {
-//			throw new RuntimeException(e);
-//		}
-//	}
+	
+	private void export(CommandSourceStack source, IJeiRuntime runtime, RecipeType<?> recipeType) {
+		source.sendFailure(Component.literal(recipeType.toString()));
+	}
+	
+	private static IJeiRuntime getJEIRuntimeOrThrow() {
+		return getJEIRuntime().orElseThrow(() -> new IllegalStateException("无法访问JEI插件"));
+	}
+	
+	private static Optional<IJeiRuntime> getJEIRuntime() {
+		return Optional.ofNullable(JEIPlugin.INSTANCE)
+				.map(i -> i.runtime);
+	}
 /// /		IJeiRuntime runtime = INSTANCE.runtime;
 /// /		IRecipeCategory<?> category = runtime.getRecipeManager().getRecipeCategory(recipeType);
 /// /		//绑定贴图

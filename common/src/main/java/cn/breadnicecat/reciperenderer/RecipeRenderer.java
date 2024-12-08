@@ -47,7 +47,7 @@ public class RecipeRenderer {
 		registerExtension(VanillaRecipeExporter.ID, new VanillaRecipeExporter());
 		if (platform.isLoaded("jei")) {
 			new JEIPlugin();//在forge环境下注册jei插件
-			registerExtension("jei", new JEIExporter());
+			registerExtension(JEIExporter.ID, new JEIExporter());
 		}
 		logger.info("初始化完成!");
 	}

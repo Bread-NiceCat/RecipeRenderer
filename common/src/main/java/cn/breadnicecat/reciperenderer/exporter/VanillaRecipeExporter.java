@@ -10,7 +10,6 @@ import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.Commands;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -30,10 +29,10 @@ import java.util.HashSet;
 import java.util.List;
 
 import static cn.breadnicecat.reciperenderer.utils.RRUtils.GSON;
-import static com.mojang.brigadier.Command.SINGLE_SUCCESS;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static net.minecraft.ChatFormatting.GREEN;
 import static net.minecraft.ChatFormatting.YELLOW;
+import static net.minecraft.commands.Commands.argument;
 
 /**
  * Created in 2024/11/24 01:23
@@ -55,7 +54,7 @@ public class VanillaRecipeExporter implements RRExtension {
 	
 	@Override
 	public ArgumentBuilder<CommandSourceStack, ?> buildCommand() {
-		return Commands.argument("namespace", StringArgumentType.string())
+		return argument("namespace", StringArgumentType.string())
 				.suggests((context, builder) -> {
 					context.getSource().getLevel().getRecipeManager().getRecipeIds()
 							.map(ResourceLocation::getNamespace)
@@ -75,9 +74,15 @@ public class VanillaRecipeExporter implements RRExtension {
 					List<RecipeHolder<?>> list = manager.getOrderedRecipes().stream()
 							.filter(h -> h.id().getNamespace().equals(namespace))
 							.toList();
-					logger.info("共搜索到了{}条配方", list.size());
+					int size = list.size();
+					if (size == 0) {
+						source.sendFailure(Component.literal("未搜索到配方"));
+						return 0;
+					}
+					logger.info("共搜索到了{}条配方", size);
 					workingDir.mkdirs();
-					File o = RRUtils.createFileDistinct(workingDir, namespace + ".json");
+					//由于文件系统不允许带'*'的文件
+					File o = new File(workingDir, namespace + ".json");
 					try (var writer = Files.newBufferedWriter(o.toPath(), UTF_8)) {
 						writer.write("#" + RRUtils.getMetadata());
 						//导出从以下开始
@@ -119,7 +124,7 @@ public class VanillaRecipeExporter implements RRExtension {
 					} catch (IOException e) {
 						throw new RuntimeException("致命IO错误," + e, e);
 					}
-					return SINGLE_SUCCESS;
+					return 1;
 				});
 	}
 	
