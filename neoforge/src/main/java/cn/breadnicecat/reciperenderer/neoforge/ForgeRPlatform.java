@@ -1,7 +1,6 @@
 package cn.breadnicecat.reciperenderer.neoforge;
 
-import cn.breadnicecat.reciperenderer.RPlatform;
-import cn.breadnicecat.reciperenderer.RecipeRenderer;
+import cn.breadnicecat.reciperenderer.platform.RPlatform;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.internal.versions.neoforge.NeoForgeVersion;
 import net.neoforged.neoforgespi.language.IModFileInfo;
@@ -37,7 +36,7 @@ public class ForgeRPlatform implements RPlatform {
 	
 	
 	@Override
-	public RecipeRenderer.Platform getPlatform() {
-		return RecipeRenderer.Platform.NEOFORGE;
+	public Loader getLoader() {
+		return Loader.NeoForge;
 	}
 }

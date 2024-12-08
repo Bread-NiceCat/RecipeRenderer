@@ -1,5 +1,6 @@
-package cn.breadnicecat.reciperenderer;
+package cn.breadnicecat.reciperenderer.platform;
 
+import cn.breadnicecat.reciperenderer.RecipeRenderer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.stream.Stream;
@@ -16,17 +17,32 @@ import java.util.stream.Stream;
 public interface RPlatform {
 	Stream<String> listMods();
 	
-	RecipeRenderer.Platform getPlatform();
+	Loader getLoader();
 	
+	/**
+	 * @return 获取指定mod的版本, 当不存在时返回null
+	 */
 	@Nullable String getVersion(String modid);
+	
+	default String getRRVersion() {
+		return getVersion(RecipeRenderer.MOD_ID);
+	}
 	
 	default boolean isLoaded(String modid) {
 		return getVersion(modid) != null;
 	}
 	
+	/**
+	 * @return 获取模组加载器的版本
+	 */
 	String getLoaderVersion();
 	
 	default String getLoaderName() {
-		return getPlatform().getName();
+		return getLoader().toString();
 	}
+	
+	enum Loader {
+		NeoForge, Fabric;
+	}
+	
 }

@@ -18,7 +18,7 @@
       "cn.breadnicecat.reciperenderer.fabric.RecipeRendererImpl"
     ],
     "jei_mod_plugin": [
-      "cn.breadnicecat.reciperenderer.JEIPlugin"
+      "cn.breadnicecat.reciperenderer.exporter.jei.JEIPlugin"
     ]
   },
   "depends": {

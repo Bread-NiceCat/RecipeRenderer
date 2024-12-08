@@ -1,10 +1,13 @@
-package cn.breadnicecat.reciperenderer;
+package cn.breadnicecat.reciperenderer.exporter.jei;
 
+import cn.breadnicecat.reciperenderer.utils.RRUtils;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Created in 2024/11/24 01:38
@@ -17,13 +20,11 @@ import org.jetbrains.annotations.NotNull;
  **/
 @JeiPlugin
 public class JEIPlugin implements IModPlugin {
-	public static JEIPlugin INSTANCE;
-	public final static @NotNull ResourceLocation UID = RecipeRenderer.prefix("jei");
-	private IJeiRuntime runtime;
+	private static final Logger logger = LoggerFactory.getLogger(JEIPlugin.class);
 	
-	public JEIPlugin() {
-		INSTANCE = this;
-	}
+	public static JEIPlugin INSTANCE;
+	public final static @NotNull ResourceLocation UID = RRUtils.prefix("jei");
+	public IJeiRuntime runtime;
 	
 	@Override
 	public @NotNull ResourceLocation getPluginUid() {
@@ -32,8 +33,9 @@ public class JEIPlugin implements IModPlugin {
 	
 	@Override
 	public void onRuntimeAvailable(IJeiRuntime runtime) {
-		RecipeRenderer.LOGGER.info("JEI插件已经就绪");
 		this.runtime = runtime;
+		INSTANCE = this;
+		logger.info("JEI插件已经就绪");
 	}
 	
 }

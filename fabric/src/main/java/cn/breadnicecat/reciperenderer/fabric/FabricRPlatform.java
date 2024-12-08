@@ -1,7 +1,6 @@
 package cn.breadnicecat.reciperenderer.fabric;
 
-import cn.breadnicecat.reciperenderer.RPlatform;
-import cn.breadnicecat.reciperenderer.RecipeRenderer;
+import cn.breadnicecat.reciperenderer.platform.RPlatform;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.impl.FabricLoaderImpl;
@@ -36,7 +35,8 @@ public class FabricRPlatform implements RPlatform {
 	}
 	
 	@Override
-	public RecipeRenderer.Platform getPlatform() {
-		return RecipeRenderer.Platform.FABRIC;
+	public Loader getLoader() {
+		return Loader.Fabric;
 	}
+	
 }

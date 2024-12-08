@@ -3,7 +3,6 @@ plugins {
     id 'dev.architectury.loom' version '1.7-SNAPSHOT' apply false
     id 'architectury-plugin' version '3.4-SNAPSHOT'
     id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
-    id "io.github.pacifistmc.forgix" version "1.2.+"
 }
 architectury {
     minecraft = minecraft_version
@@ -12,26 +11,6 @@ ext {
     use_jbr_feature = (println(compileJava.javaCompiler.get().metadata.vendor)) == "JetBrains"
 }
 String archive_file_base_name = "${archives_name}-${minecraft_version}"
-forgix {
-    group = maven_group
-    mergedJarName = "${archive_file_base_name}-merged-${mod_version}.jar"
-    outputDir = "build/libs/merged"
-    neoforge {
-        println(jarLocation = "build/libs/${archive_file_base_name}-neoforge-${mod_version}.jar")
-        return null
-    }
-    fabric {
-        println(jarLocation = "build/libs/${archive_file_base_name}-fabric-${mod_version}.jar")
-        return null
-    }
-}
-mergeJars {
-    dependsOn ':fabric:build'
-    dependsOn ':neoforge:build'
-}
-build {
-    finalizedBy mergeJars
-}
 
 allprojects {
     apply plugin: "java"

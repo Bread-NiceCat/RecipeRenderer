@@ -1,0 +1,2 @@
+println type
+println runtime
