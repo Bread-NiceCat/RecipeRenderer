@@ -1,6 +1,12 @@
 name: build
-on: *
-
+on:
+  push:
+    paths-ignore:
+      - '.docs/**'
+      - '*.md'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.gitattributes'
 jobs:
   build:
     strategy:
