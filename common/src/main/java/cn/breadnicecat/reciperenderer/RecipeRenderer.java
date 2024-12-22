@@ -1,9 +1,10 @@
 package cn.breadnicecat.reciperenderer;
 
-import cn.breadnicecat.reciperenderer.exporter.VanillaRecipeExporter;
+import cn.breadnicecat.reciperenderer.api.IExporter;
+import cn.breadnicecat.reciperenderer.exporter.SimpleRecipeExporter;
 import cn.breadnicecat.reciperenderer.exporter.jei.JEIExporter;
-import cn.breadnicecat.reciperenderer.exporter.jei.JEIPlugin;
 import cn.breadnicecat.reciperenderer.platform.RPlatform;
+import cn.breadnicecat.reciperenderer.serializer.SerializerManager;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.DetectedVersion;
@@ -13,8 +14,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.Comparator;
+import java.util.TreeSet;
 import java.util.stream.Stream;
 
 /**
@@ -35,40 +36,47 @@ public class RecipeRenderer {
 	public static final File exportDir = new File(Minecraft.getInstance().gameDirectory, "rr_export");
 	public static final String MC_VERSION = DetectedVersion.BUILT_IN.getName();
 	private static RPlatform platform;
-	private static TreeMap<String, RRExtension> extensions = new TreeMap<>();
+	public static final SerializerManager manager = new SerializerManager();
+	private static final TreeSet<IExporter> exporters = new TreeSet<>(Comparator.comparing(IExporter::getExporterName));
 	
-	public static void init(@NotNull RPlatform platform) {
-		if (RecipeRenderer.platform != null) {
-			throw new IllegalStateException("initialized");
-		}
-		logger.info("初始化...");
-		RecipeRenderer.platform = platform;
-		logger.info("当前版本:{},mc版本:{},mod加载器:{}@{}", platform.getRRVersion(), MC_VERSION, platform.getLoaderName(), platform.getLoaderVersion());
-		registerExtension(VanillaRecipeExporter.ID, new VanillaRecipeExporter());
-		if (platform.isLoaded("jei")) {
-			new JEIPlugin();//在forge环境下注册jei插件
-			registerExtension(JEIExporter.ID, new JEIExporter());
-		}
-		logger.info("初始化完成!");
-	}
 	
 	public static RPlatform getPlatform() {
 		return platform;
 	}
 	
+	
+	public static SerializerManager getSerializerManager() {
+		return manager;
+	}
+	
+	public static void registerExporter(IExporter exporter) {
+		exporters.add(exporter);
+	}
+	
+	public static Stream<IExporter> getAllExporters() {
+		return exporters.stream();
+	}
+	//==================================================//
+	
 	/**
-	 * 注册插件.允许在任意时刻进行注册(线程不安全),不允许重复注册.
+	 * 其他mod不应该调用这个方法
 	 */
-	public static void registerExtension(String id, RRExtension extension) {
-		RRExtension dup = extensions.put(id, extension);
-		if (dup != null) {
-			throw new IllegalArgumentException("重复注册插件:%s (class1=%s,class2=%s)".formatted(id, extension.getClass().descriptorString(), dup.getClass().descriptorString()));
+	public static void init(@NotNull RPlatform platform) {
+		if (RecipeRenderer.platform != null) {
+			throw new IllegalStateException("重复初始化...");
 		}
-		logger.info("成功注册插件:{} (class={})", id, extension.getClass().descriptorString());
+		if (!platform.isClient()) {
+			throw new IllegalStateException("尝试在服务器上加载" + MOD_ID + "/Try loading " + MOD_ID + " on the server.");
+		}
+		
+		registerExporter(new SimpleRecipeExporter());
+		if (platform.isLoaded("jei")) {
+			registerExporter(new JEIExporter());
+		}
+		
+		logger.info("开始初始化...");
+		RecipeRenderer.platform = platform;
+		logger.info("当前版本:{},mc版本:{},mod加载器:{}@{}", platform.getRRVersion(), MC_VERSION, platform.getLoaderName(), platform.getLoaderVersion());
+		logger.info("初始化完成!");
 	}
-	
-	public static @NotNull Stream<Map.Entry<String, RRExtension>> getAllExtensions() {
-		return extensions.entrySet().stream();
-	}
-	
 }

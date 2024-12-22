@@ -1,4 +1,4 @@
-package cn.breadnicecat.reciperenderer;
+package cn.breadnicecat.reciperenderer.api;
 
 import com.mojang.brigadier.builder.ArgumentBuilder;
 import net.minecraft.commands.CommandSourceStack;
@@ -13,7 +13,8 @@ import net.minecraft.commands.CommandSourceStack;
  * <p>
  **/
 
-public interface RRExtension {
-	
+public interface IExporter {
 	ArgumentBuilder<CommandSourceStack, ?> buildCommand();
+	
+	String getExporterName();
 }

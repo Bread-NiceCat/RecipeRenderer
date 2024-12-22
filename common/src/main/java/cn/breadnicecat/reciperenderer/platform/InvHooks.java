@@ -1,14 +1,17 @@
 package cn.breadnicecat.reciperenderer.platform;
 
-import cn.breadnicecat.reciperenderer.RRExtension;
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
 import cn.breadnicecat.reciperenderer.utils.RRUtils;
 import com.mojang.brigadier.CommandDispatcher;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static net.minecraft.commands.Commands.literal;
 
@@ -21,24 +24,38 @@ import static net.minecraft.commands.Commands.literal;
  * 反向钩子
  * <p>
  **/
-public class PlatformInvHooks {
+public class InvHooks {
 	
-	private static final Logger logger = LoggerFactory.getLogger(PlatformInvHooks.class);
+	private static final Logger logger = LoggerFactory.getLogger(InvHooks.class);
 	
 	public static void registerCommands(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext context, Commands.CommandSelection selection) {
-		logger.info("正在为{}注册指令", selection);
+		logger.info("正在注册指令");
+		
 		var open = literal("open").executes(c -> {
 			RRUtils.open(RecipeRenderer.exportDir);
 			return 0;
 		});
-		var export = RRUtils.apply(literal("export"), (c) -> {
-			RecipeRenderer.getAllExtensions().forEach((es) -> {
-				String id = es.getKey();
-				RRExtension ex = es.getValue();
-				c.then(literal(id).then(ex.buildCommand()));
+		var export = RRUtils.apply(literal("export"), c -> {
+			RecipeRenderer.getAllExporters().forEach(es -> {
+				String name = es.getExporterName();
+				c.then(literal(name).then(es.buildCommand()));
 			});
 		});
 		dispatcher.register(literal(RecipeRenderer.MOD_ID).then(open).then(export));
 		dispatcher.register(literal("rr").then(open).then(export));
+	}
+	
+	private static final ConcurrentLinkedQueue<Runnable> tickQueue = new ConcurrentLinkedQueue<>();
+	
+	public static void hookClientTick(Runnable runnable) {
+		tickQueue.add(runnable);
+	}
+	
+	@Environment(EnvType.CLIENT)
+	public static void postClientTick() {
+		Runnable r;
+		while ((r = tickQueue.poll()) != null) {
+			r.run();
+		}
 	}
 }

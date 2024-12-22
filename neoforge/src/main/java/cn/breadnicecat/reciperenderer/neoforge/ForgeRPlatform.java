@@ -2,6 +2,7 @@ package cn.breadnicecat.reciperenderer.neoforge;
 
 import cn.breadnicecat.reciperenderer.platform.RPlatform;
 import net.neoforged.fml.ModList;
+import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.internal.versions.neoforge.NeoForgeVersion;
 import net.neoforged.neoforgespi.language.IModFileInfo;
 import net.neoforged.neoforgespi.language.IModInfo;
@@ -30,6 +31,16 @@ public class ForgeRPlatform implements RPlatform {
 	}
 	
 	@Override
+	public boolean isLoaded(String modid) {
+		return ModList.get().isLoaded(modid);
+	}
+	
+	@Override
+	public boolean isClient() {
+		return FMLLoader.getDist().isClient();
+	}
+	
+	@Override
 	public String getLoaderVersion() {
 		return NeoForgeVersion.getVersion();
 	}
@@ -37,6 +48,6 @@ public class ForgeRPlatform implements RPlatform {
 	
 	@Override
 	public Loader getLoader() {
-		return Loader.NeoForge;
+		return Loader.neoforge;
 	}
 }

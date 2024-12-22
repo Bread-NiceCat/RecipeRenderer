@@ -28,9 +28,9 @@ public interface RPlatform {
 		return getVersion(RecipeRenderer.MOD_ID);
 	}
 	
-	default boolean isLoaded(String modid) {
-		return getVersion(modid) != null;
-	}
+	boolean isLoaded(String modid);
+	
+	boolean isClient();
 	
 	/**
 	 * @return 获取模组加载器的版本
@@ -42,7 +42,7 @@ public interface RPlatform {
 	}
 	
 	enum Loader {
-		NeoForge, Fabric;
+		neoforge, fabric;
 	}
 	
 }

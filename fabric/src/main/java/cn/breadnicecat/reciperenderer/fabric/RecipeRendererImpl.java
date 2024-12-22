@@ -1,8 +1,9 @@
 package cn.breadnicecat.reciperenderer.fabric;
 
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
-import cn.breadnicecat.reciperenderer.platform.PlatformInvHooks;
+import cn.breadnicecat.reciperenderer.platform.InvHooks;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 
 /**
@@ -19,7 +20,8 @@ public class RecipeRendererImpl implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		RecipeRenderer.init(new FabricRPlatform());
-		CommandRegistrationCallback.EVENT.register((PlatformInvHooks::registerCommands));
+		CommandRegistrationCallback.EVENT.register((InvHooks::registerCommands));
+		ClientTickEvents.END_CLIENT_TICK.register(mc -> InvHooks.postClientTick());
 	}
 	
 }

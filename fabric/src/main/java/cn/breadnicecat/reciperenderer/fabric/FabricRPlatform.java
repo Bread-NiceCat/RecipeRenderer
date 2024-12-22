@@ -1,6 +1,7 @@
 package cn.breadnicecat.reciperenderer.fabric;
 
 import cn.breadnicecat.reciperenderer.platform.RPlatform;
+import net.fabricmc.api.EnvType;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.impl.FabricLoaderImpl;
@@ -30,13 +31,23 @@ public class FabricRPlatform implements RPlatform {
 	}
 	
 	@Override
+	public boolean isLoaded(String modid) {
+		return FabricLoader.getInstance().isModLoaded(modid);
+	}
+	
+	@Override
+	public boolean isClient() {
+		return FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT;
+	}
+	
+	@Override
 	public String getLoaderVersion() {
 		return getVersion(FabricLoaderImpl.MOD_ID);
 	}
 	
 	@Override
 	public Loader getLoader() {
-		return Loader.Fabric;
+		return Loader.fabric;
 	}
 	
 }

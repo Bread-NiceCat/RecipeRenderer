@@ -1,21 +1,23 @@
 package cn.breadnicecat.reciperenderer.exporter.jei;
 
 
-import cn.breadnicecat.reciperenderer.RRExtension;
-import cn.breadnicecat.reciperenderer.RecipeRenderer;
+import cn.breadnicecat.reciperenderer.api.IExporter;
+import cn.breadnicecat.reciperenderer.utils.RRUtils;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
 import mezz.jei.api.recipe.RecipeType;
+import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 
+import static cn.breadnicecat.reciperenderer.RecipeRenderer.exportDir;
 import static net.minecraft.commands.Commands.argument;
 
 /**
@@ -27,12 +29,14 @@ import static net.minecraft.commands.Commands.argument;
  *
  * <p>
  **/
-public class JEIExporter implements RRExtension {
+public class JEIExporter implements IExporter {
 	
 	private static final Logger logger = LoggerFactory.getLogger(JEIExporter.class);
-	
 	public static final String ID = "jei";
-	public static final File workingDir = new File(RecipeRenderer.exportDir, ID);
+	public static final File workingDir = exportDir;
+	
+	public JEIExporter() {
+	}
 	
 	@Override
 	public ArgumentBuilder<CommandSourceStack, ?> buildCommand() {
@@ -52,10 +56,18 @@ public class JEIExporter implements RRExtension {
 							getJEIRuntime().ifPresent(runtime -> {
 								String namespace = StringArgumentType.getString(context, "namespace");
 								runtime.getJeiHelpers().getAllRecipeTypes()
-										.map(RecipeType::getUid)
-										.filter(r -> r.getNamespace().equals(namespace))
-										.map(ResourceLocation::getPath)
-										.forEach(builder::suggest);
+										.filter(r -> r.getUid().getNamespace().equals(namespace))
+										.forEach(r -> {
+											ResourceLocation uid = r.getUid();
+											String path = uid.getPath();
+											try {
+												IRecipeCategory<?> category = runtime.getRecipeManager().getRecipeCategory(r);
+												builder.suggest(path, category.getTitle());
+											} catch (Throwable t) {
+												logger.error("获取JEI分栏标题时遇到异常" + r.getUid(), t);
+												builder.suggest(path);
+											}
+										});
 							});
 							return builder.buildFuture();
 						}))
@@ -80,8 +92,22 @@ public class JEIExporter implements RRExtension {
 				});
 	}
 	
+	@Override
+	public String getExporterName() {
+		return "jei";
+	}
+	
 	private void export(CommandSourceStack source, IJeiRuntime runtime, RecipeType<?> recipeType) {
-		source.sendFailure(Component.literal(recipeType.toString()));
+		IRecipeCategory<?> category = runtime.getRecipeManager().getRecipeCategory(recipeType);
+		System.out.println(category.getClass());
+		//绑定贴图
+		try {
+			RRUtils.render(category.getWidth(), category.getHeight(), graphics -> {
+			
+			}).get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new RuntimeException(e.toString(), e);
+		}
 	}
 	
 	private static IJeiRuntime getJEIRuntimeOrThrow() {
