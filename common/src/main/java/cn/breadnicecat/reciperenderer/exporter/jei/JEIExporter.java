@@ -5,16 +5,21 @@ import cn.breadnicecat.reciperenderer.api.IExporter;
 import cn.breadnicecat.reciperenderer.utils.RRUtils;
 import com.google.gson.JsonObject;
 import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
+import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import mezz.jei.api.gui.drawable.IDrawable;
 import mezz.jei.api.helpers.IJeiHelpers;
+import mezz.jei.api.recipe.IFocusGroup;
+import mezz.jei.api.recipe.IRecipeLookup;
+import mezz.jei.api.recipe.IRecipeManager;
 import mezz.jei.api.recipe.RecipeType;
 import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.api.runtime.IJeiRuntime;
 import mezz.jei.common.Internal;
 import mezz.jei.common.gui.elements.DrawableNineSliceTexture;
-import net.minecraft.client.renderer.Rect2i;
+import mezz.jei.common.util.ImmutableRect2i;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
@@ -157,24 +162,48 @@ public class JEIExporter implements IExporter {
 	public static final int DEFAULT_RECIPE_BORDER_PADDING = 4;
 	
 	
-	private JsonObject export(File workingDir, IJeiRuntime runtime, RecipeType<?> recipeType) {
-		IRecipeCategory<?> category = runtime.getRecipeManager().getRecipeCategory(recipeType);
+	private <T> JsonObject export(File workingDir, IJeiRuntime runtime, RecipeType<T> recipeType) {
+		IRecipeManager recipeManager = runtime.getRecipeManager();
+		IRecipeCategory<T> category = recipeManager.getRecipeCategory(recipeType);
 		//绑定贴图
-		byte[] bg, bg_raw, ico;
+		byte[] bg, ico;
 		try {
-			bg_raw = RRUtils.render(category.getWidth(), category.getHeight(), graphics -> {
-				IDrawable background = category.getBackground();
-				background.draw(graphics);
-			}, NativeImage::flipY).get();
+//			bg_raw = RRUtils.render(category.getWidth(), category.getHeight(), graphics -> {
+//				IDrawable background = category.getBackground();
+//				background.draw(graphics);
+//			}, NativeImage::flipY).get();
+
+//			int border = DEFAULT_RECIPE_BORDER_PADDING;
+//			int width = category.getWidth() + 2 * border;
+//			int height = category.getHeight() + 2 * border;
+//			bg = RRUtils.render(width, height, graphics -> {
+//				DrawableNineSliceTexture recipeBackground = Internal.getTextures().getRecipeBackground();
+//				IDrawable background = category.getBackground();
+//				recipeBackground.draw(graphics, new Rect2i(0, 0, width, height));
+//				background.draw(graphics, border, border);
+//			}, NativeImage::flipY).get();
 			
+			//NOTE:JEI后续getBackground方法被弃用
+			
+			IRecipeLookup<T> lookup = recipeManager.createRecipeLookup(recipeType);
 			int border = DEFAULT_RECIPE_BORDER_PADDING;
-			int width = category.getWidth() + 2 * border;
-			int height = category.getHeight() + 2 * border;
-			bg = RRUtils.render(width, height, graphics -> {
-				DrawableNineSliceTexture recipeBackground = Internal.getTextures().getRecipeBackground();
-				IDrawable background = category.getBackground();
-				recipeBackground.draw(graphics, new Rect2i(0, 0, width, height));
-				background.draw(graphics, border, border);
+			int scale = 2;
+			int w = category.getWidth() + 2 * border;
+			int h = category.getHeight() + 2 * border;
+			bg = RRUtils.render(w * scale, h * scale, graphics -> {
+				PoseStack pose = graphics.pose();
+				pose.pushPose();
+				{
+					pose.scale(scale, scale, 1);
+					T recipe = lookup.get().findFirst().orElseThrow();
+					IFocusGroup focusGroup = runtime.getJeiHelpers().getFocusFactory().getEmptyFocusGroup();
+					IRecipeLayoutDrawable<T> drawable = recipeManager.createRecipeLayoutDrawable(category, recipe, focusGroup).orElseThrow();
+					DrawableNineSliceTexture recipeBackground = Internal.getTextures().getRecipeBackground();
+					recipeBackground.draw(graphics, new ImmutableRect2i(0, 0, w, h));
+					pose.translate(border, border, 0);
+					drawable.drawRecipe(graphics, -1, -1);
+				}
+				pose.popPose();
 			}, NativeImage::flipY).get();
 			
 			IDrawable iconDrawable = category.getIcon();
@@ -186,7 +215,7 @@ public class JEIExporter implements IExporter {
 			throw new RuntimeException("渲染异常: " + e, e);
 		}
 		try {
-			Files.write(new File(workingDir, "bg_raw.png").toPath(), bg_raw);
+//			Files.write(new File(workingDir, "bg_raw.png").toPath(), bg_raw);
 			Files.write(new File(workingDir, "bg.png").toPath(), bg);
 			if (ico != null) {
 				Files.write(new File(workingDir, "ico.png").toPath(), ico);
