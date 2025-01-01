@@ -187,7 +187,7 @@ public class JEIExporter implements IExporter {
 			
 			IRecipeLookup<T> lookup = recipeManager.createRecipeLookup(recipeType);
 			int border = DEFAULT_RECIPE_BORDER_PADDING;
-			int scale = 2;
+			int scale = 4;
 			int w = category.getWidth() + 2 * border;
 			int h = category.getHeight() + 2 * border;
 			bg = RRUtils.render(w * scale, h * scale, graphics -> {
@@ -208,7 +208,15 @@ public class JEIExporter implements IExporter {
 			
 			IDrawable iconDrawable = category.getIcon();
 			ico = iconDrawable != null
-					? RRUtils.render(iconDrawable.getWidth(), iconDrawable.getHeight(), iconDrawable::draw, NativeImage::flipY).get()
+					? RRUtils.render(iconDrawable.getWidth() * 4, iconDrawable.getHeight() * 4, graphics -> {
+				PoseStack stack = graphics.pose();
+				stack.pushPose();
+				{
+					stack.scale(4, 4, 1);
+					iconDrawable.draw(graphics);
+				}
+				stack.popPose();
+			}, NativeImage::flipY).get()
 					: null;
 			
 		} catch (InterruptedException | ExecutionException e) {
