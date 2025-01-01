@@ -23,7 +23,7 @@ public class JEIPlugin implements IModPlugin {
 	private static final Logger logger = LoggerFactory.getLogger(JEIPlugin.class);
 	
 	public static JEIPlugin INSTANCE;
-	public final static @NotNull ResourceLocation UID = RRUtils.prefix("jei");
+	public final static @NotNull ResourceLocation UID = RRUtils.modPrefix("jei");
 	public IJeiRuntime runtime;
 	
 	@Override

@@ -8,8 +8,11 @@ architectury {
     minecraft = minecraft_version
 }
 ext {
-    use_jbr_feature = (println(compileJava.javaCompiler.get().metadata.vendor)) == "JetBrains"
+    def vendor = compileJava.javaCompiler.get().metadata.vendor
+    use_jbr_feature = vendor == "JetBrains"
+    println "jvm_vendor: $vendor ${use_jbr_feature ? "(use_jbr_feature)" : ""}"
 }
+
 String archive_file_base_name = "${archives_name}-${minecraft_version}"
 
 allprojects {

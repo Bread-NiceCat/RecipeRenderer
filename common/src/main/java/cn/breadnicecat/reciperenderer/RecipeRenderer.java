@@ -3,8 +3,9 @@ package cn.breadnicecat.reciperenderer;
 import cn.breadnicecat.reciperenderer.api.IExporter;
 import cn.breadnicecat.reciperenderer.exporter.SimpleRecipeExporter;
 import cn.breadnicecat.reciperenderer.exporter.jei.JEIExporter;
+import cn.breadnicecat.reciperenderer.platform.InvHooks;
 import cn.breadnicecat.reciperenderer.platform.RPlatform;
-import cn.breadnicecat.reciperenderer.serializer.SerializerManager;
+import cn.breadnicecat.reciperenderer.utils.RRUtils;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.DetectedVersion;
@@ -36,7 +37,6 @@ public class RecipeRenderer {
 	public static final File exportDir = new File(Minecraft.getInstance().gameDirectory, "rr_export");
 	public static final String MC_VERSION = DetectedVersion.BUILT_IN.getName();
 	private static RPlatform platform;
-	public static final SerializerManager manager = new SerializerManager();
 	private static final TreeSet<IExporter> exporters = new TreeSet<>(Comparator.comparing(IExporter::getExporterName));
 	
 	
@@ -44,10 +44,6 @@ public class RecipeRenderer {
 		return platform;
 	}
 	
-	
-	public static SerializerManager getSerializerManager() {
-		return manager;
-	}
 	
 	public static void registerExporter(IExporter exporter) {
 		exporters.add(exporter);
@@ -77,6 +73,10 @@ public class RecipeRenderer {
 		logger.info("开始初始化...");
 		RecipeRenderer.platform = platform;
 		logger.info("当前版本:{},mc版本:{},mod加载器:{}@{}", platform.getRRVersion(), MC_VERSION, platform.getLoaderName(), platform.getLoaderVersion());
+		InvHooks.hookClientTick(() -> {
+			logger.info("正在切换到简体中文");
+			RRUtils.forceChinese();
+		});
 		logger.info("初始化完成!");
 	}
 }

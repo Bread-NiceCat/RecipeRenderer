@@ -33,7 +33,7 @@ public class RecipeRendererImpl {
 	}
 	
 	public void onClientTick(ClientTickEvent.Post event) {
-		InvHooks.postClientTick();
+		InvHooks.onClientTick();
 	}
 	
 	public void onRegisterCommands(RegisterCommandsEvent event) {

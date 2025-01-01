@@ -15,10 +15,6 @@ import net.minecraft.world.item.crafting.Recipe;
  * <p>
  **/
 public interface IRecipeSerializer {
-	/**
-	 * 注意:不要指望上层处理此方法抛出的异常,
-	 * 任何异常的捕获应该在该方法内处理并返回error
-	 */
 	DataResult<JsonObject> serialize(ResourceLocation id, Recipe<?> recipe);
 	
 	String getSerializerName();

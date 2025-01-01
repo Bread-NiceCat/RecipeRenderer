@@ -11,7 +11,9 @@ import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeSerializer;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
 import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * Created in 2024/12/22 04:24
@@ -23,6 +25,8 @@ import java.util.Optional;
  * <p>
  **/
 public class CodecSerializer implements IRecipeSerializer {
+	private static HashMap<Class<? extends Recipe<?>>, Function<JsonObject, JsonObject>> modifiers = new HashMap<>();
+	
 	@SuppressWarnings({"rawtypes", "unchecked"})
 	@Override
 	public @Nullable DataResult<JsonObject> serialize(ResourceLocation id, Recipe recipe) {
@@ -33,9 +37,25 @@ public class CodecSerializer implements IRecipeSerializer {
 		try {
 			DataResult<JsonObject> result = (DataResult) serializer.codec().encoder().encodeStart(JsonOps.INSTANCE, recipe);
 			JsonObject data = result.getOrThrow();
+			Function<JsonObject, JsonObject> modifier = modifiers.get(recipe.getClass());
+			if (modifier != null) {
+				try {
+					data = modifier.apply(data);
+				} catch (Exception e) {
+					return DataResult.error(() -> "在修饰时发生了错误");
+				}
+			}
+			
 			return DataResult.success(RRUtils.createSerializedRecipe(id, getSerializerName(), rt, data));
 		} catch (Exception e) {
 			return DataResult.error(() -> "在序列化时发生了错误:" + e);
+		}
+	}
+	
+	@SafeVarargs
+	public static <R extends Recipe<?>> void registerResultModifier(Function<JsonObject, JsonObject> modifier, Class<? extends R>... targets) {
+		for (Class<? extends R> ts : targets) {
+			modifiers.put(ts, modifier);
 		}
 	}
 	

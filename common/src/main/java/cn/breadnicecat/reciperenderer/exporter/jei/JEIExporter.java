@@ -3,17 +3,28 @@ package cn.breadnicecat.reciperenderer.exporter.jei;
 
 import cn.breadnicecat.reciperenderer.api.IExporter;
 import cn.breadnicecat.reciperenderer.utils.RRUtils;
+import com.google.gson.JsonObject;
+import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
+import mezz.jei.api.gui.drawable.IDrawable;
+import mezz.jei.api.helpers.IJeiHelpers;
 import mezz.jei.api.recipe.RecipeType;
 import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.api.runtime.IJeiRuntime;
+import mezz.jei.common.Internal;
+import mezz.jei.common.gui.elements.DrawableNineSliceTexture;
+import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 
@@ -32,8 +43,6 @@ import static net.minecraft.commands.Commands.argument;
 public class JEIExporter implements IExporter {
 	
 	private static final Logger logger = LoggerFactory.getLogger(JEIExporter.class);
-	public static final String ID = "jei";
-	public static final File workingDir = exportDir;
 	
 	public JEIExporter() {
 	}
@@ -64,7 +73,7 @@ public class JEIExporter implements IExporter {
 												IRecipeCategory<?> category = runtime.getRecipeManager().getRecipeCategory(r);
 												builder.suggest(path, category.getTitle());
 											} catch (Throwable t) {
-												logger.error("获取JEI分栏标题时遇到异常" + r.getUid(), t);
+												logger.error("获取JEI分栏标题时遇到异常 uid=" + r.getUid(), t);
 												builder.suggest(path);
 											}
 										});
@@ -72,22 +81,67 @@ public class JEIExporter implements IExporter {
 							return builder.buildFuture();
 						}))
 						.executes(context -> {
+							long stt = System.currentTimeMillis();
+							
+							File workingDir = RRUtils.createNewResultDir(exportDir);
+							
 							String namespace = StringArgumentType.getString(context, "namespace");
 							String path = StringArgumentType.getString(context, "path");
+							
 							IJeiRuntime runtime = getJEIRuntimeOrThrow();
 							ResourceLocation uid = ResourceLocation.fromNamespaceAndPath(namespace, path);
-							export(context.getSource(), runtime, runtime.getJeiHelpers().getRecipeType(uid).orElseThrow(() -> new IllegalArgumentException("无效的配方类型")));
+							IJeiHelpers helpers = runtime.getJeiHelpers();
+							
+							File resDir = new File(workingDir, uid.getNamespace() + "/" + uid.getPath());
+							resDir.mkdirs();
+							JsonObject object = export(resDir, runtime, helpers.getRecipeType(uid).orElseThrow(() -> new IllegalArgumentException("无效的配方类型")));
+							try {
+								RRUtils.writeJsonResults(workingDir, "result", context.getInput(), List.of(object), false);
+							} catch (IOException e) {
+								throw new RuntimeException("写入result错误:" + e, e);
+							}
+							RRUtils.hookClientTick((mc) -> {
+								mc.gui.getChat().addMessage(RRUtils.createFinishedMessage(stt, 1, 0, 0));
+								mc.gui.getChat().addMessage(RRUtils.createMayOpenMessage("[打开目录]", workingDir));
+							});
+							
 							return 1;
 						}))
 				.executes(context -> {
-					CommandSourceStack source = context.getSource();
+					long stt = System.currentTimeMillis();
+					File workingDir = RRUtils.createNewResultDir(exportDir);
+					
 					String namespace = StringArgumentType.getString(context, "namespace");
 					IJeiRuntime runtime = getJEIRuntimeOrThrow();
-					runtime.getJeiHelpers().getAllRecipeTypes()
+					int[] status = {0, 0, 0};
+					List<JsonObject> results = runtime.getJeiHelpers().getAllRecipeTypes()
 							.filter(r -> r.getUid().getNamespace().equals(namespace))
-							.forEach(r -> {
-								export(source, runtime, r);
-							});
+							.map(r -> {
+								ResourceLocation uid = r.getUid();
+								try {
+									File resDir = new File(workingDir, uid.getNamespace() + "/" + uid.getPath());
+									resDir.mkdirs();
+									return export(resDir, runtime, r);
+								} catch (Exception e) {
+									logger.error("JEI专栏导出错误: uid=" + uid, e);
+									return null;
+								}
+							})
+							.peek(o -> {
+								if (o == null) status[2]++;
+								else status[0]++;
+							})
+							.filter(Objects::nonNull)
+							.toList();
+					try {
+						RRUtils.writeJsonResults(workingDir, "result", context.getInput(), results, false);
+					} catch (IOException e) {
+						throw new RuntimeException("写入result错误:" + e, e);
+					}
+					RRUtils.hookClientTick((mc) -> {
+						mc.gui.getChat().addMessage(RRUtils.createFinishedMessage(stt, status[0], status[1], status[2]));
+						mc.gui.getChat().addMessage(RRUtils.createMayOpenMessage("[打开目录]", workingDir));
+					});
 					return 1;
 				});
 	}
@@ -97,16 +151,56 @@ public class JEIExporter implements IExporter {
 		return "jei";
 	}
 	
-	private void export(CommandSourceStack source, IJeiRuntime runtime, RecipeType<?> recipeType) {
+	/**
+	 * @see mezz.jei.library.gui.recipes.RecipeLayout#DEFAULT_RECIPE_BORDER_PADDING
+	 */
+	public static final int DEFAULT_RECIPE_BORDER_PADDING = 4;
+	
+	
+	private JsonObject export(File workingDir, IJeiRuntime runtime, RecipeType<?> recipeType) {
 		IRecipeCategory<?> category = runtime.getRecipeManager().getRecipeCategory(recipeType);
-		System.out.println(category.getClass());
 		//绑定贴图
+		byte[] bg, bg_raw, ico;
 		try {
-			RRUtils.render(category.getWidth(), category.getHeight(), graphics -> {
+			bg_raw = RRUtils.render(category.getWidth(), category.getHeight(), graphics -> {
+				IDrawable background = category.getBackground();
+				background.draw(graphics);
+			}, NativeImage::flipY).get();
 			
-			}).get();
+			int border = DEFAULT_RECIPE_BORDER_PADDING;
+			int width = category.getWidth() + 2 * border;
+			int height = category.getHeight() + 2 * border;
+			bg = RRUtils.render(width, height, graphics -> {
+				DrawableNineSliceTexture recipeBackground = Internal.getTextures().getRecipeBackground();
+				IDrawable background = category.getBackground();
+				recipeBackground.draw(graphics, new Rect2i(0, 0, width, height));
+				background.draw(graphics, border, border);
+			}, NativeImage::flipY).get();
+			
+			IDrawable iconDrawable = category.getIcon();
+			ico = iconDrawable != null
+					? RRUtils.render(iconDrawable.getWidth(), iconDrawable.getHeight(), iconDrawable::draw, NativeImage::flipY).get()
+					: null;
+			
 		} catch (InterruptedException | ExecutionException e) {
-			throw new RuntimeException(e.toString(), e);
+			throw new RuntimeException("渲染异常: " + e, e);
+		}
+		try {
+			Files.write(new File(workingDir, "bg_raw.png").toPath(), bg_raw);
+			Files.write(new File(workingDir, "bg.png").toPath(), bg);
+			if (ico != null) {
+				Files.write(new File(workingDir, "ico.png").toPath(), ico);
+			}
+			
+			JsonObject object = new JsonObject();
+			object.addProperty("uid", category.getRecipeType().getUid().toString());
+			object.addProperty("title", category.getTitle().getString());
+			object.addProperty("bg", RRUtils.base64(bg));
+//			object.addProperty("bg_raw", RRUtils.base64(bg_raw));
+			object.addProperty("ico", ico == null ? "" : RRUtils.base64(ico));
+			return object;
+		} catch (IOException e) {
+			throw new RuntimeException("输出结果时发生了异常: " + e, e);
 		}
 	}
 	
@@ -118,57 +212,5 @@ public class JEIExporter implements IExporter {
 		return Optional.ofNullable(JEIPlugin.INSTANCE)
 				.map(i -> i.runtime);
 	}
-/// /		IJeiRuntime runtime = INSTANCE.runtime;
-/// /		IRecipeCategory<?> category = runtime.getRecipeManager().getRecipeCategory(recipeType);
-/// /		//绑定贴图
-/// /		RenderTarget target = new TextureTarget(category.getWidth(), category.getHeight(), false, Minecraft.ON_OSX);
-/// /		target.bindWrite(true);
-/// /		target.bindRead();
-/// /		GuiGraphics graphics = new GuiGraphics(Minecraft.getInstance(), Minecraft.getInstance().renderBuffers().bufferSource());
-/// /		//JEI渲染部分
-/// /		{
-/// /			IJeiHelpers helpers = runtime.getJeiHelpers();
-/// /			IFocusFactory focusFactory = helpers.getFocusFactory();
-/// /			IDrawable background = category.getBackground();
-/// ///			runtime.getRecipeManager().getRecipeCategoryDecorators()
-/// /			DrawableNineSliceTexture recipeBackground = Internal.getTextures().getRecipeBackground();
-/// /			ImmutableRect2i area = new ImmutableRect2i(
-/// /					0,
-/// /					0,
-/// /					category.getWidth(),
-/// /					category.getHeight()
-/// /			);
-/// /			//DEFAULT_RECIPE_BORDER_PADDING
-/// ///			create(category, )
-/// /		}
-/// /		try (NativeImage image = new NativeImage(target.width, target.height, false)) {
-/// /			image.downloadTexture(0, false);
-/// /			target.destroyBuffers();
-/// /			byte[] data;
-/// /			data = image.asByteArray();
-/// /		} catch (IOException e) {
-/// /			throw new RuntimeException("在处理图片时出现了错误", e);
-/// /		}
-/// /	}
-/// /
-/// /	public static <T> IRecipeLayoutDrawable<T> create(
-/// /			IRecipeCategory<T> recipeCategory,
-/// /			Collection<IRecipeCategoryDecorator<T>> decorators,
-/// ///			T recipe,
-/// /			IFocusGroup focuses,
-/// /			IIngredientManager ingredientManager,
-/// /			IScalableDrawable recipeBackground,
-/// /			int recipeBorderPadding
-/// /	) {
-/// /		RecipeLayoutBuilder<T> builder = new RecipeLayoutBuilder<>(recipeCategory, null, ingredientManager);
-/// ///		recipeCategory.setRecipe(builder, recipe, focuses);
-/// ///		recipeCategory.createRecipeExtras(builder, recipe, focuses);
-/// /		return builder.buildRecipeLayout(
-/// /				focuses,
-/// /				decorators,
-/// /				recipeBackground,
-/// /				recipeBorderPadding
-/// /		);
-/// /	}
-
+	
 }

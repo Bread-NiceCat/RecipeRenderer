@@ -2,6 +2,7 @@ package cn.breadnicecat.reciperenderer.platform;
 
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
 import cn.breadnicecat.reciperenderer.utils.RRUtils;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.brigadier.CommandDispatcher;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -52,9 +53,11 @@ public class InvHooks {
 	}
 	
 	@Environment(EnvType.CLIENT)
-	public static void postClientTick() {
+	public static void onClientTick() {
+		RenderSystem.assertOnRenderThread();
+		long time = System.currentTimeMillis();
 		Runnable r;
-		while ((r = tickQueue.poll()) != null) {
+		while (System.currentTimeMillis() - time < 50 && (r = tickQueue.poll()) != null) {
 			r.run();
 		}
 	}

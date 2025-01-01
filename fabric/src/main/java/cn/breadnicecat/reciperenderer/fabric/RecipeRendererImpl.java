@@ -21,7 +21,7 @@ public class RecipeRendererImpl implements ModInitializer {
 	public void onInitialize() {
 		RecipeRenderer.init(new FabricRPlatform());
 		CommandRegistrationCallback.EVENT.register((InvHooks::registerCommands));
-		ClientTickEvents.END_CLIENT_TICK.register(mc -> InvHooks.postClientTick());
+		ClientTickEvents.END_CLIENT_TICK.register(mc -> InvHooks.onClientTick());
 	}
 	
 }

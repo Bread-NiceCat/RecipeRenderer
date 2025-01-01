@@ -30,9 +30,9 @@ import static cn.breadnicecat.reciperenderer.utils.RRUtils.DEV;
  */
 public class DEBUGS {
 	
-	public static final File PROJECT_ROOT = new File("").getAbsoluteFile().getParentFile();
-	//	public static final File TEST_CLASSES = new File(PROJECT_ROOT, "build/classes/java/test");
-	public static final File TEST_SRC_CODE = new File(PROJECT_ROOT, "src/test/java");
+	public static final File PROJECT_ROOT = new File("").getAbsoluteFile().getParentFile().getParentFile();
+	public static final File COMMON_ROOT = new File(PROJECT_ROOT, "common");
+	public static final File COMMON_SRC_DIR = new File(COMMON_ROOT, "src");
 	/**
 	 * 给idea的调试器eval存储数据的地方
 	 */
