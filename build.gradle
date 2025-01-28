@@ -9,28 +9,48 @@ architectury {
 }
 ext {
     def vendor = compileJava.javaCompiler.get().metadata.vendor
-    use_jbr_feature = vendor == "JetBrains"
+    use_jbr_feature = (vendor == "JetBrains")
     println "jvm_vendor: $vendor ${use_jbr_feature ? "(use_jbr_feature)" : ""}"
 }
 
-String archive_file_base_name = "${archives_name}-${minecraft_version}"
+String sha = System.getenv("GITHUB_SHA")
+String short_sha = sha == null ? null : sha.substring(0, 7);
+if (sha != null) println "SHA Got! sha=$sha short=$short_sha"
 
 allprojects {
-    apply plugin: "java"
-    apply plugin: "idea"
-    apply plugin: "architectury-plugin"
-    apply plugin: "maven-publish"
-    version = mod_version
-    group = maven_group
-    archivesBaseName = archive_file_base_name
+    group = rootProject.maven_group
+    version = rootProject.mod_version
+
     repositories {
-        if (Locale.getDefault() == Locale.CHINA) {
-            var aliyun = maven { url = "https://maven.aliyun.com/repository/public" }
-            remove aliyun
-            addFirst aliyun
-        }
+        var aliyun = maven { url = "https://maven.aliyun.com/repository/public" }
+        remove(aliyun)
+        addFirst(aliyun)
         maven { url = "https://modmaven.dev" }
         maven { url = 'https://maven.parchmentmc.org' }
+    }
+    //declare repositories
+    println("=".repeat(64))
+    println("here in project ${project.name}")
+    println("repo here=>")
+    getRepositories().forEach {
+        print "\t"
+        if (it instanceof UrlArtifactRepository) {
+            println it.url
+        } else if (it instanceof FlatDirectoryArtifactRepository) {
+            println it.dirs
+        } else print it
+    }
+//================================================================//
+}
+
+subprojects {
+    apply plugin: 'dev.architectury.loom'
+    apply plugin: "architectury-plugin"
+    apply plugin: "maven-publish"
+
+    base {
+        // Set up a suffixed format for the mod jar names, e.g. `example-fabric`.
+        archivesName = "${archives_name}" + "-${project.name}" + "-${minecraft_version}" + "${short_sha == null ? "" : "-${short_sha}"}"
     }
 }
 subprojects {
@@ -41,28 +61,15 @@ subprojects {
             officialMojangMappings()
             parchment("org.parchmentmc.data:${parchment_version}")
         }
+
     }
     java {
         withSourcesJar()
-        targetCompatibility = 21
-        sourceCompatibility = 21
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
+
     tasks.withType(JavaCompile).configureEach {
-        it.options.encoding = "UTF-8"
         it.options.release = 21
     }
 }
-//declare repositories
-println("=".repeat(64))
-println("here in project ${project.name}")
-println("repo here=>")
-getRepositories().forEach { it ->
-    if (it instanceof UrlArtifactRepository) {
-        println it.url
-    } else if (it instanceof FlatDirectoryArtifactRepository) {
-        println it.dirs
-    } else print it
-}
-println("repo end")
-println("=".repeat(64))
-//================================================================//

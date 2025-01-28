@@ -1,6 +1,6 @@
 package cn.breadnicecat.reciperenderer.neoforge;
 
-import cn.breadnicecat.reciperenderer.platform.RPlatform;
+import cn.breadnicecat.reciperenderer.utils.platform.RPlatform;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.internal.versions.neoforge.NeoForgeVersion;

@@ -4,13 +4,8 @@ architectury {
 loom {
     accessWidenerPath = file("src/main/resources/reciperenderer.accesswidener")
 }
-dependencies {
-    // We depend on Fabric Loader here to use the Fabric @Environment annotations,
-    // which get remapped to the correct annotations on each platform.
-    // Do NOT use other classes from Fabric Loader.
-    modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
-    implementation 'org.codehaus.groovy:groovy:3.0.19'
 
-//    modCompileOnly("mezz.jei:jei-${rootProject.minecraft_version}-common-api:${rootProject.jei_version}")
+dependencies {
+    modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
     api("mezz.jei:jei-${rootProject.minecraft_version}-common:${rootProject.jei_version}")
 }

@@ -1,7 +1,7 @@
 package cn.breadnicecat.reciperenderer.api.dumper;
 
-import cn.breadnicecat.reciperenderer.serializer.impl.RecipeInputImpl;
-import cn.breadnicecat.reciperenderer.serializer.impl.RecipeOutputImpl;
+import cn.breadnicecat.reciperenderer.exporter.recipe.serializer.impl.RecipeInputImpl;
+import cn.breadnicecat.reciperenderer.exporter.recipe.serializer.impl.RecipeOutputImpl;
 import cn.breadnicecat.reciperenderer.utils.RRUtils;
 import com.google.gson.JsonObject;
 import net.minecraft.core.RegistryAccess;

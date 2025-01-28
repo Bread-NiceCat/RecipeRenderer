@@ -1,7 +1,7 @@
 package cn.breadnicecat.reciperenderer.neoforge;
 
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
-import cn.breadnicecat.reciperenderer.platform.InvHooks;
+import cn.breadnicecat.reciperenderer.utils.platform.InvHooks;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;

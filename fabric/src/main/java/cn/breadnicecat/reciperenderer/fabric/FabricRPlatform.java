@@ -1,6 +1,6 @@
 package cn.breadnicecat.reciperenderer.fabric;
 
-import cn.breadnicecat.reciperenderer.platform.RPlatform;
+import cn.breadnicecat.reciperenderer.utils.platform.RPlatform;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;

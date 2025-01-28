@@ -1,4 +1,4 @@
-package cn.breadnicecat.reciperenderer.serializer.impl;
+package cn.breadnicecat.reciperenderer.exporter.recipe.serializer.impl;
 
 import cn.breadnicecat.reciperenderer.api.dumper.IRecipeOutputs;
 import com.google.gson.JsonObject;

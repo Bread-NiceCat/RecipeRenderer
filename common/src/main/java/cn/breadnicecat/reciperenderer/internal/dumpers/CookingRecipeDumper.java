@@ -1,4 +1,4 @@
-package cn.breadnicecat.reciperenderer.serializer.dumpers;
+package cn.breadnicecat.reciperenderer.internal.dumpers;
 
 import cn.breadnicecat.reciperenderer.api.dumper.IRecipeDumper;
 import cn.breadnicecat.reciperenderer.api.dumper.IRecipeInputs;

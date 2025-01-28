@@ -1,7 +1,7 @@
 package cn.breadnicecat.reciperenderer.fabric;
 
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
-import cn.breadnicecat.reciperenderer.platform.InvHooks;
+import cn.breadnicecat.reciperenderer.utils.platform.InvHooks;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;

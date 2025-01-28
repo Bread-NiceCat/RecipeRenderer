@@ -1,11 +1,12 @@
 package cn.breadnicecat.reciperenderer;
 
 import cn.breadnicecat.reciperenderer.api.IExporter;
-import cn.breadnicecat.reciperenderer.exporter.SimpleRecipeExporter;
 import cn.breadnicecat.reciperenderer.exporter.jei.JEIExporter;
-import cn.breadnicecat.reciperenderer.platform.InvHooks;
-import cn.breadnicecat.reciperenderer.platform.RPlatform;
+import cn.breadnicecat.reciperenderer.exporter.recipe.SimpleRecipeExporter;
+import cn.breadnicecat.reciperenderer.internal.InternalImpl;
 import cn.breadnicecat.reciperenderer.utils.RRUtils;
+import cn.breadnicecat.reciperenderer.utils.platform.InvHooks;
+import cn.breadnicecat.reciperenderer.utils.platform.RPlatform;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.DetectedVersion;
@@ -65,17 +66,20 @@ public class RecipeRenderer {
 			throw new IllegalStateException("尝试在服务器上加载" + MOD_ID + "/Try loading " + MOD_ID + " on the server.");
 		}
 		
+		logger.info("开始初始化...");
+		RecipeRenderer.platform = platform;
+		logger.info("当前版本:{},mc版本:{},mod加载器:{}@{}", platform.getRRVersion(), MC_VERSION, platform.getLoaderName(), platform.getLoaderVersion());
+		logger.info("加载内置实现...");
+		new InternalImpl();
 		registerExporter(new SimpleRecipeExporter());
 		if (platform.isLoaded("jei")) {
 			registerExporter(new JEIExporter());
 		}
+//		registerExporter(new WorldExporter());
 		
-		logger.info("开始初始化...");
-		RecipeRenderer.platform = platform;
-		logger.info("当前版本:{},mc版本:{},mod加载器:{}@{}", platform.getRRVersion(), MC_VERSION, platform.getLoaderName(), platform.getLoaderVersion());
 		InvHooks.hookClientTick(() -> {
 			logger.info("正在切换到简体中文");
-			RRUtils.forceChinese();
+			RRUtils.setChinese();
 		});
 		logger.info("初始化完成!");
 	}

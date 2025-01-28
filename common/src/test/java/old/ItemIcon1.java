@@ -1,4 +1,4 @@
-package cn.breadnicecat.reciperenderer.old;
+package old;
 
 import cn.breadnicecat.reciperenderer.utils.RRUtils;
 import com.mojang.blaze3d.pipeline.RenderTarget;

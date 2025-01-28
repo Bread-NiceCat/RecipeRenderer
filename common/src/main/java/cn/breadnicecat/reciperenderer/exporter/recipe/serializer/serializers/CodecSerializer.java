@@ -1,4 +1,4 @@
-package cn.breadnicecat.reciperenderer.serializer.serializers;
+package cn.breadnicecat.reciperenderer.exporter.recipe.serializer.serializers;
 
 import cn.breadnicecat.reciperenderer.api.IRecipeSerializer;
 import cn.breadnicecat.reciperenderer.utils.RRUtils;

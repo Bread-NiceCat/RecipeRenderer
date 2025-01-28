@@ -1,35 +1,34 @@
 package cn.breadnicecat.reciperenderer.utils;
 
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
-import cn.breadnicecat.reciperenderer.platform.InvHooks;
-import cn.breadnicecat.reciperenderer.platform.RPlatform;
+import cn.breadnicecat.reciperenderer.utils.image.LayeredRecorderGraphics;
+import cn.breadnicecat.reciperenderer.utils.image.RecorderGraphics;
+import cn.breadnicecat.reciperenderer.utils.platform.InvHooks;
+import cn.breadnicecat.reciperenderer.utils.platform.RPlatform;
 import com.google.gson.*;
-import com.mojang.blaze3d.pipeline.RenderTarget;
-import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import com.mojang.serialization.JsonOps;
-import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.resources.language.LanguageManager;
 import net.minecraft.core.RegistryAccess;
-import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.HoverEvent;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.crafting.Ingredient;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.PrintWriter;
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.metadata.IIOMetadata;
+import javax.imageio.stream.MemoryCacheImageOutputStream;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -132,32 +131,37 @@ public class RRUtils {
 		return future;
 	}
 	
+	public static void transformMatrixTemporally(Matrix4f matrix, VertexSorting sorting, Runnable runnable) {
+		Matrix4f oldProjMatrix = RenderSystem.getProjectionMatrix();
+		VertexSorting oldVertexSorting = RenderSystem.getVertexSorting();
+		try {
+			RenderSystem.setProjectionMatrix(matrix, sorting);
+			runnable.run();
+		} finally {
+			RenderSystem.setProjectionMatrix(oldProjMatrix, oldVertexSorting);
+		}
+	}
+	
 	public static CompletableFuture<byte[]> render(int width, int height, @NotNull Consumer<GuiGraphics> render, @Nullable Consumer<NativeImage> modifier) {
 		return hookClientTickSupplier((mc) -> {
-			Matrix4f oldProjMatrix = RenderSystem.getProjectionMatrix();
-			VertexSorting oldVertexSorting = RenderSystem.getVertexSorting();
-			try {
-				Matrix4f projMatrix = new Matrix4f().setOrtho(0, width, height, 0, -1000, 1000);
-				RenderSystem.setProjectionMatrix(projMatrix, VertexSorting.ORTHOGRAPHIC_Z);
-				
-				RenderTarget target = new TextureTarget(width, height, true, Minecraft.ON_OSX);
-				target.bindWrite(true);
-				
-				GuiGraphics graphics = new GuiGraphics(mc, mc.renderBuffers().bufferSource());
-				render.accept(graphics);
-				graphics.flush();
-				try (NativeImage image = new NativeImage(target.width, target.height, false)) {
-					target.bindRead();
-					image.downloadTexture(0, false);
-					if (modifier != null) modifier.accept(image);
-					return image.asByteArray();
-				} catch (IOException e) {
-					throw new IllegalStateException("处理图片时遇到致命异常", e);
-				} finally {
-					target.destroyBuffers();
-				}
-			} finally {
-				RenderSystem.setProjectionMatrix(oldProjMatrix, oldVertexSorting);
+			try (RecorderGraphics t = new RecorderGraphics(width, height, modifier)) {
+				transformMatrixTemporally(new Matrix4f().setOrtho(0, width, height, 0, -1000, 1000), VertexSorting.ORTHOGRAPHIC_Z, () -> {
+					render.accept(t);
+				});
+				t.flush();
+				return t.download();
+			}
+		});
+	}
+	
+	public static CompletableFuture<byte[][]> renderLayered(int width, int height, @NotNull Consumer<GuiGraphics> render, @Nullable Consumer<NativeImage> modifier) {
+		return hookClientTickSupplier((mc) -> {
+			try (LayeredRecorderGraphics t = new LayeredRecorderGraphics(width, height, modifier)) {
+				transformMatrixTemporally(new Matrix4f().setOrtho(0, width, height, 0, -1000, 1000), VertexSorting.ORTHOGRAPHIC_Z, () -> {
+					render.accept(t);
+					t.flush();
+				});
+				return t.getLayered();
 			}
 		});
 	}
@@ -172,48 +176,6 @@ public class RRUtils {
 		object.addProperty("type", serializer + "/" + type);
 		object.add("data", data);
 		return object;
-	}
-	
-	public static MutableComponent createMayOpenMessage(String text, File toOpen) {
-		return Component.literal(text).withStyle(s -> s
-				.withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_FILE, toOpen.toString()))
-				.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("单击打开" + toOpen.getName())))
-				.withColor(ChatFormatting.LIGHT_PURPLE)
-		);
-	}
-	
-	public static MutableComponent createFinishedMessage(long beginTime, int successCnt, int warnCnt, int errorCnt) {
-		MutableComponent c = Component.literal("共耗时:")
-				.append(Component.literal(String.valueOf((System.currentTimeMillis() - beginTime)))
-						.withStyle(ChatFormatting.UNDERLINE))
-				.append(Component.literal("毫秒"))
-				.withStyle(ChatFormatting.AQUA);
-		
-		if (successCnt != 0) {
-			c.append(Component.literal("成功:")
-					.append(Component.literal(String.valueOf(successCnt))
-							.withStyle(ChatFormatting.UNDERLINE))
-					.withStyle(ChatFormatting.GREEN)
-					.append(";")
-			);
-		}
-		if (warnCnt != 0) {
-			c.append(Component.literal("警告:")
-					.append(Component.literal(String.valueOf(warnCnt))
-							.withStyle(ChatFormatting.UNDERLINE))
-					.withStyle(ChatFormatting.YELLOW)
-					.append(";")
-			);
-		}
-		if (errorCnt != 0) {
-			c.append(Component.literal("错误:")
-					.append(Component.literal(String.valueOf(errorCnt))
-							.withStyle(ChatFormatting.UNDERLINE))
-					.withStyle(ChatFormatting.RED)
-					.append(";")
-			);
-		}
-		return c;
 	}
 	
 	private static final DateTimeFormatter DIR_PATTERN = DateTimeFormatter.ofPattern("yyyyMMdd");
@@ -240,26 +202,33 @@ public class RRUtils {
 	}
 	
 	/**
-	 * @param baseName 不要带后缀
-	 * @return 返回导出的文件夹
+	 * @param baseName       不要带后缀
+	 * @param createFreshDir 如果为true则创建一个新文件夹作为工作文件夹，否则直接以rootDir为工作文件夹
+	 * @return 返回导出的文件
 	 */
 	public static File writeJsonResults(File rootDir, String baseName, String command, List<JsonObject> out, boolean createFreshDir) throws IOException {
 		File specDir = createFreshDir ? createNewResultDir(rootDir) : rootDir;
 		
 		RPlatform platform = RecipeRenderer.getPlatform();
 		long timestamp = System.currentTimeMillis();
-		try (PrintWriter writer = new PrintWriter(new FileWriter(new File(specDir, baseName + ".json"), StandardCharsets.UTF_8))) {
+		File file = new File(specDir, baseName + ".json");
+		try (PrintWriter writer = new PrintWriter(new FileWriter(file, StandardCharsets.UTF_8))) {
+			writer.println("#schema=1");
 			writer.println("#mc=" + MC_VERSION);
 			writer.println("#loader=" + platform.getLoaderName() + "@" + platform.getLoaderVersion());
 			writer.println("#core=" + MOD_ID + "@" + platform.getRRVersion());
 			writer.println("#export_cmd=" + command);
 			writer.println("#task_stamp=" + timestamp);
-			for (JsonObject object : out) {
-				String line = GSON.toJson(object);
-				writer.println(line);
+			if (out.size() == 1) {
+				writer.println(PRETTY.toJson(out.getFirst()));
+			} else {
+				for (JsonObject object : out) {
+					String line = GSON.toJson(object);
+					writer.println(line);
+				}
 			}
 		}
-		return specDir;
+		return file;
 		
 	}
 	
@@ -269,7 +238,7 @@ public class RRUtils {
 	
 	public static final String CHINESE_SIMPLIFIED = "zh_cn";
 	
-	public static void forceChinese() {
+	public static void setChinese() {
 		Minecraft instance = Minecraft.getInstance();
 		LanguageManager languageManager = instance.getLanguageManager();
 		if (Objects.equals(languageManager.getSelected(), CHINESE_SIMPLIFIED)) return;
@@ -281,5 +250,35 @@ public class RRUtils {
 //		ClientLanguage en = ClientLanguage.loadFrom(instance.getResourceManager(), List.of("en_us"), false);
 //		Language rawl = Language.getInstance();
 //		Language.inject(rawl);
+	}
+	
+	public static void sendChat(Component message) {
+		Minecraft.getInstance().gui.getChat().addMessage(message);
+	}
+	
+	public static byte[] tiff(List<byte[]> images) {
+		ImageWriter writer = ImageIO.getImageWritersByFormatName("tiff").next();
+		ByteArrayOutputStream buffer = new ByteArrayOutputStream(1024 * 1024);
+		
+		try (MemoryCacheImageOutputStream transfer = new MemoryCacheImageOutputStream(buffer)) {
+			writer.setOutput(transfer);
+			ImageWriteParam param = writer.getDefaultWriteParam();
+			param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+			param.setCompressionType("LZW"); //使用LZW压缩
+			IIOMetadata metadata = writer.getDefaultStreamMetadata(param);
+			
+			if (!images.isEmpty()) {
+				writer.prepareWriteSequence(metadata);
+				for (byte[] img : images) {
+					IIOImage iioImage = new IIOImage(ImageIO.read(new ByteArrayInputStream(img)), null, metadata);
+					writer.writeToSequence(iioImage, param);
+				}
+				writer.endWriteSequence();
+			}
+			writer.dispose();
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+		return buffer.toByteArray();
 	}
 }

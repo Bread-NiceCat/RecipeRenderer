@@ -1,16 +1,12 @@
-package cn.breadnicecat.reciperenderer.serializer.serializers;
+package cn.breadnicecat.reciperenderer.exporter.recipe.serializer.serializers;
 
 import cn.breadnicecat.reciperenderer.api.IRecipeSerializer;
 import cn.breadnicecat.reciperenderer.api.dumper.IRecipeDumper;
-import cn.breadnicecat.reciperenderer.serializer.dumpers.CookingRecipeDumper;
-import cn.breadnicecat.reciperenderer.serializer.dumpers.CraftingRecipeDumper;
-import cn.breadnicecat.reciperenderer.serializer.dumpers.SmithingRecipeDumper;
-import cn.breadnicecat.reciperenderer.serializer.dumpers.StoneCuttingRecipeDumper;
 import cn.breadnicecat.reciperenderer.utils.RRUtils;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.DataResult;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.crafting.*;
+import net.minecraft.world.item.crafting.Recipe;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -28,13 +24,6 @@ public class DumperSerializer implements IRecipeSerializer {
 	//	private static ClassRelationMap<Recipe<?>, IRecipeDumper<?>> dumpers = new ClassRelationMap<>();
 	private static HashMap<Class<? extends Recipe<?>>, IRecipeDumper<?>> dumpers = new HashMap<>();
 	
-	static {
-		registerRecipeDumper(new CookingRecipeDumper(), BlastingRecipe.class, CampfireCookingRecipe.class, SmeltingRecipe.class, SmokingRecipe.class);
-		registerRecipeDumper(new CraftingRecipeDumper.Shaped(), ShapedRecipe.class, MapExtendingRecipe.class);
-		registerRecipeDumper(new CraftingRecipeDumper.Shapeless(), ShapelessRecipe.class);
-		registerRecipeDumper(new SmithingRecipeDumper.Transform(), SmithingTransformRecipe.class);
-		registerRecipeDumper(new StoneCuttingRecipeDumper(), StonecutterRecipe.class);
-	}
 	
 	@SafeVarargs
 	public static <R extends Recipe<?>> void registerRecipeDumper(IRecipeDumper<R> dumper, Class<? extends R>... targets) {

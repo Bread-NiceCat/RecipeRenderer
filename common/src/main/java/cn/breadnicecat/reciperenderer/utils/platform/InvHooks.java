@@ -1,4 +1,4 @@
-package cn.breadnicecat.reciperenderer.platform;
+package cn.breadnicecat.reciperenderer.utils.platform;
 
 import cn.breadnicecat.reciperenderer.RecipeRenderer;
 import cn.breadnicecat.reciperenderer.utils.RRUtils;
